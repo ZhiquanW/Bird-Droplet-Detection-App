@@ -28,11 +28,11 @@ def register_texture(imgae_path, tag):
     im = np.append(im, np.ones((height, width, 1)), 2)
     with dpg.texture_registry():
         dpg.add_dynamic_texture(width, height, im, tag=tag)
-    return width, height
+    return width, height ,im
 
 
 def add_texture_to_workspace(image_path, texture_tag, parent_axis, show=False):
-    img_w, img_h = register_texture(image_path, texture_tag)
+    img_w, img_h ,im = register_texture(image_path, texture_tag)
     img_size = np.array([img_w, img_h],dtype=np.int)
     img_top_left = np.array([0, 0],dtype=np.int)
     img_bottom_right = img_top_left + img_size
@@ -45,7 +45,7 @@ def add_texture_to_workspace(image_path, texture_tag, parent_axis, show=False):
         parent=parent_axis,
     )
     img_cell = cell_info(texture_tag, img_series_tag, img_size, img_top_left)
-    return img_cell
+    return img_cell,img_w, img_h ,im
 
 
 def add_image_buff_to_workspace(img_size, img_buff_tag, parent_axis, show=False,transparent= False):
@@ -112,3 +112,6 @@ def parse_image_selector_data(app_data):
         img_pair = ImgPathPair(bright=img_path[0], blue=img_path[1])
     elif img_types[0] == "e":
         img_pair = ImgPathPair(bright=img_path[1], blue=img_path[0])
+
+def set_heatmap(predicted_heatmap):
+    dpg.set_value("Heatmap",predicted_heatmap)

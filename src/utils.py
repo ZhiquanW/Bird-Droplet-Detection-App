@@ -20,7 +20,8 @@ import core
 import random
 import math
 from PIL import Image, ImageOps
-
+import dearpygui.dearpygui as dpg
+from PIL import Image, ImageOps,ImageDraw
 
 def format_dict_str(src_dict):
     str_dict = ""
@@ -842,3 +843,76 @@ def binary_droplet_detection_heatmap(
     )
     return droplet_densitymap
 
+def droplet_locs(predicted_map,w):
+    cell_bool = predicted_map > 0
+    locs = np.where(cell_bool)
+    x_locs = w - locs[0] + 4
+    y_locs = locs[1] -10
+    list_x_locs = x_locs.tolist()
+    list_y_locs = y_locs.tolist()
+    locs = []
+    for i in range(0,len(list_x_locs)):   
+        locs.append([list_y_locs[i],list_x_locs[i]])
+        # print(i)
+    # print(locs)
+    return locs
+
+def draw_rectangle(buff_data,texture_name,droplet_locs,rect_color,rectangle_size):
+    im = Image.fromarray(np.uint8(buff_data))
+    im_draw = ImageDraw.Draw(im)
+    bounds = []
+    i = 0
+    n = 0
+    # print(type(locs))
+    for loc in droplet_locs:
+        n+=1
+        bounds.append([loc[0]+rectangle_size,loc[1]-rectangle_size])
+        bounds.append([loc[0]-rectangle_size,loc[1]+rectangle_size])       
+        # num
+        print('darwing',n)   
+        # rectangle_locs
+        x1, y1 =bounds[i]
+        x2, y2 =bounds[i+1]
+        i+=2
+        # set outline
+        im_draw.rectangle((x1, y1, x2, y2), outline=rect_color, width=1)
+    im = im.transpose(Image.FLIP_TOP_BOTTOM)
+    im.save('detect_img.png')
+    im = os.path.join(os.getcwd(),'detect_img.png')
+    width, height, channels, data = dpg.load_image(im)
+    # set iamge texture value
+    dpg.set_value(texture_name,data)
+
+def clean_similar_locs(droplet_locs,defalut_size = 4):
+    n = 0
+    for loc in droplet_locs:
+        n += 1
+        print("loc",loc,n)
+        pr_locs = []
+        for x in range(1,defalut_size):
+            for y in range(1,defalut_size):
+                pr_locs.append([loc[0]-x,loc[1]])
+                pr_locs.append([loc[0]+x,loc[1]])
+                pr_locs.append([loc[0],loc[1]+y])
+                pr_locs.append([loc[0],loc[1]-y])
+                pr_locs.append([loc[0]-x,loc[1]+y])
+                pr_locs.append([loc[0]+x,loc[1]+y])
+                pr_locs.append([loc[0]-x,loc[1]-y])
+                pr_locs.append([loc[0]+x,loc[1]-y])
+        for pr_loc in pr_locs:
+            if pr_loc in droplet_locs:
+                droplet_locs.remove(pr_loc)   
+    return droplet_locs 
+
+def find_rect_locs(loc,locs,find_size = 6):
+    for x in range(find_size):
+        for y in range(find_size):
+            locs.append([loc[0]-x,loc[1]])
+            locs.append([loc[0]+x,loc[1]])
+            locs.append([loc[0],loc[1]+y])
+            locs.append([loc[0],loc[1]-y])
+            locs.append([loc[0]-x,loc[0]+y])
+            locs.append([loc[0]+x,loc[1]+y])
+            locs.append([loc[0]-x,loc[1]-y])
+            locs.append([loc[0]+x,loc[0]-y])
+    return locs

@@ -118,6 +118,14 @@ class app:
         self.image_loaded = False
         self.default_font = None
         self.item_tag_dict = {}
+        self.rect_item_tag_dict = {}
+        self.buff_data = None
+        self.img_size = [None,None]
+        self.rectangle_size = 6
+        self.target_type_names = ("Type One", "Type Two", "Type Three", "Type Four", "Type Five")
+        self.droplet_dict_locs = {"Type One":None, "Type Two":None, "Type Three":None, "Type Four":None, "Type Five":None}
+        self.droplet_dict_num = {"Type One":None, "Type Two":None, "Type Three":None, "Type Four":None, "Type Five":None}
+        self.droplet_dict_colors = {"Type One":"red", "Type Two":"white", "Type Three":"green", "Type Four":"yellow", "Type Five":"blue"}
 
     def __load_models(self):
         for i in range(5):
@@ -256,15 +264,49 @@ class app:
                 invert=True,
                 parent=item_tags.image_plot_workspace,
             )
-
-    def handler_registry(self):
-        with dpg.handler_registry(tag=item_tags.workspace_handler) as handler:
-            dpg.add_mouse_click_handler(
-                button=0, callback=callbacks.add_droplet_manually, user_data=self
-            )
-        dpg.bind_item_handler_registry(
-            item_tags.image_plot_workspace, item_tags.workspace_handler
-        )
+    # def handler_registry(self):
+    #     with dpg.handler_registry(tag=item_tags.workspace_handler) as handler:
+    #         dpg.add_mouse_click_handler(
+    #             button=0, callback=callbacks.add_droplet_manually, user_data=self
+    #         )
+    #     dpg.bind_item_handler_registry(
+    #         item_tags.image_plot_workspace, item_tags.workspace_handler
+    #     )
+    def __setting_rect_group(self):
+        with dpg.group(tag="setting rect group",parent=item_tags.main_window,pos=(650,460),show=False):
+            self.rect_item_tag_dict["rect_size"] = dpg.add_slider_int(
+                label="rectangle size",
+                width=200,
+                default_value=6,
+                min_value=4,
+                max_value=10,
+                callback=callbacks.set_rect_size,
+                user_data=self,
+                enabled=False
+                )
+            self.rect_item_tag_dict["add_droplet_manually"] = dpg.add_button(
+                label="add droplet",
+                callback = callbacks.add_droplet_manually,
+                user_data=self,
+                enabled=False
+                )
+            self.rect_item_tag_dict["delete_droplet_manually"] = dpg.add_button(
+                label="delete droplet",
+                callback = callbacks.delete_droplet_manually,
+                user_data=self,
+                enabled=False
+                )
+            self.rect_item_tag_dict["rect_color"] = dpg.add_color_picker(
+                label="rectangle color",
+                no_side_preview=True,
+                display_hex=False,
+                callback=callbacks.rect_color,
+                pos=(1200,220),
+                width=280,
+                height=280,
+                user_data=self,
+                enabled=False
+                )        
 
     def launch(self):
         dpg.create_context()
@@ -272,7 +314,7 @@ class app:
         self.__load_models()
         self.__set_font()
         self.__create_ui_layout()
-        self.handler_registry()
+        self.__setting_rect_group()
         dpg.setup_dearpygui()
         dpg.show_viewport()
         dpg.set_primary_window(item_tags.main_window, True)

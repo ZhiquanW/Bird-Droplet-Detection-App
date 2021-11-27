@@ -14,7 +14,7 @@ ImgPathPair = namedtuple("ImgPair", ["bright", "blue"])
 
 
 def image_selector_callback(sender, app_data, app: app):
-    # clear previous images
+    # clear previous images  ------别名已存在
     dpg_utils.clear_drawlist(item_tags.texture_tags)
     dpg_utils.clear_drawlist(item_tags.detection_tags)
     img_keys = []
@@ -62,18 +62,25 @@ def image_selector_callback(sender, app_data, app: app):
         ),
     )
     # bright image cell
-    br_img_cell = dpg_utils.add_texture_to_workspace(
+    # br_img_cell = dpg_utils.add_texture_to_workspace(
+    # img_path_pair.bright, item_tags.texture_tags[0], app.yaxis, True
+    # )
+    br_img_cell ,app.img_size[0] ,app.img_size[1] ,im= dpg_utils.add_texture_to_workspace(
         img_path_pair.bright, item_tags.texture_tags[0], app.yaxis, True
     )
     # blue image cell
-    bl_img_cell = dpg_utils.add_texture_to_workspace(
+    # bl_img_cell = dpg_utils.add_texture_to_workspace(
+    # img_path_pair.blue, item_tags.texture_tags[1], app.yaxis, False
+    # )
+    bl_img_cell ,app.img_size[0] ,app.img_size[1] ,im= dpg_utils.add_texture_to_workspace(
         img_path_pair.blue, item_tags.texture_tags[1], app.yaxis, False
     )
     # heatmap image cell
     hm_img_cell = dpg_utils.add_image_buff_to_workspace(
         br_img_cell.size, item_tags.texture_tags[2], app.yaxis, False, True
     )
-   
+    # get buff_data
+    app.buff_data = im
     # 5 detection types
     for i in range(5):
         app.detection_gallery.append(
@@ -117,8 +124,28 @@ def detect_droplets(sender, app_data, app):
         device=app.target_device,
         verbose=True,
     )
+    app.droplet_num = droplet_num
     print("end detection: {d}".format(d=app.droplet_num))
-
+    # get all droplet_locs
+    all_droplet_locs = utils.droplet_locs(predicted_map,app.img_size[0])
+    # clean_similar_locs
+    print("(app.target_type_names)[app.target_type]:",(app.target_type_names)[app.target_type])
+    app.droplet_dict_locs[(app.target_type_names)[app.target_type]] = utils.clean_similar_locs(all_droplet_locs)
+    print("app.droplet_dict_locs:",app.droplet_dict_locs)
+    # draw rectangle
+    utils.draw_rectangle(
+        buff_data = app.buff_data,
+        texture_name = (item_tags.detection_tags)[app.target_type],
+        droplet_locs = app.droplet_dict_locs[(app.target_type_names)[app.target_type]],
+        rect_color = app.droplet_dict_colors[(app.target_type_names)[app.target_type]],
+        rectangle_size = app.rectangle_size
+        )
+    # set heatmap   ------闪退
+    dpg_utils.set_heatmap(predicted_heatmap)
+    # setting rect
+    app.setting_rect_group()
+    enable_all_rect_items(app)
+    dpg.show_item("setting rect group")
 
 def update_blue_offset(sender, app_data, app):
     if not check_image_loaded(app):
@@ -159,11 +186,13 @@ def update_win_size(sender, app_data, app):
 
 
 def swtich_target_type(sender, app_data, app):
-    names = ("Type One", "Type Two", "Type Three", "Type Four", "Type Five")
-    target_type = names.index(app_data)
+    # names = ("Type One", "Type Two", "Type Three", "Type Four", "Type Five")
+    # target_type = names.index(app_data)
+    print(app_data)
+    target_type = app.target_type_names.index(app_data)
     app.target_type = target_type
-
-    print("ctarget type: {d}".format(d=names[app.target_type]))
+    # print("ctarget type: {d}".format(d=names[app.target_type]))
+    print("ctarget type: {d}".format(d=app.target_type_names[app.target_type]))
 
 
 def set_device(sender, app_data, app):
@@ -180,11 +209,102 @@ def enable_all_items(app):
     for key, val in app.item_tag_dict.items():
         dpg.enable_item(val)
 
+def enable_all_rect_items(app):
+    for key, val in app.rect_item_tag_dict.items():
+        print(val)
+        dpg.enable_item(val)
 
-def add_droplet_manually(sender, app_data, app: app):
-    if dpg.is_item_hovered(item_tags.image_plot_workspace):
-        mouse_pos = np.array(dpg.get_plot_mouse_pos(), dtype=np.integer)
-        app.detection_data[app.target_type].append(mouse_pos)
-        dpg_utils.update_detection_result(app)
-        print(app.detection_data)
+
+# def add_droplet_manually(sender, app_data, app: app):
+#     if dpg.is_item_hovered(item_tags.image_plot_workspace):
+#         mouse_pos = np.array(dpg.get_plot_mouse_pos(), dtype=np.integer)
+#         app.detection_data[app.target_type].append(mouse_pos)
+#         dpg_utils.update_detection_result(app)
+#         # print(app.detection_data)
+
+def set_rect_size(sender, app_data, app):
+    app.rectangle_size = app_data
+    utils.draw_rectangle(
+        buff_data = app.buff_data,
+        texture_name = (item_tags.detection_tags)[app.target_type],
+        droplet_locs = app.droplet_dict_locs[(app.target_type_names)[app.target_type]],
+        rect_color = app.droplet_dict_colors[(app.target_type_names)[app.target_type]],
+        rectangle_size = app.rectangle_size,
+        )
+    print("set_rect_size")
+    return app.rectangle_size
+
+def rect_color(sender, app_data, app):
+    new_rect_color = dpg.get_value(sender)
+    color=[]
+    for i in new_rect_color:
+        color.append(int(i))
+    color_tuple = tuple(color)   
+    # print("color_tuple",color_tuple)
+    # add color_tuple to the droplet_dict_colors
+    app.droplet_dict_colors[(app.target_type_names)[app.target_type]] = color_tuple
+    utils.draw_rectangle(
+        buff_data = app.buff_data,
+        texture_name = (item_tags.detection_tags)[app.target_type],
+        droplet_locs = app.droplet_dict_locs[(app.target_type_names)[app.target_type]],
+        rect_color = app.droplet_dict_colors[(app.target_type_names)[app.target_type]],
+        rectangle_size = app.rectangle_size,
+        )
+    # print("rect_color")
+
+def add_droplet_manually(sender, app_data, app):
+    def add_droplet(sender,data,app):
+        if dpg.is_item_hovered(item_tags.image_plot_workspace): 
+            print("Add :")
+            # get droplet loc 
+            loc = dpg.get_plot_mouse_pos()
+            list_loc = [round(loc) for loc in loc]
+            # add loc to the droplet_dict_locs
+            app.droplet_dict_locs[(app.target_type_names)[app.target_type]].append(list_loc)
+            utils.draw_rectangle(
+                buff_data = app.buff_data,
+                texture_name = (item_tags.detection_tags)[app.target_type],
+                droplet_locs = app.droplet_dict_locs[(app.target_type_names)[app.target_type]],
+                rect_color = app.droplet_dict_colors[(app.target_type_names)[app.target_type]],
+                rectangle_size = app.rectangle_size,
+                )
+            print("app.droplet_dict_locs:",app.droplet_dict_locs)
+        else:
+            print("Outside the plot")
+
+    with dpg.handler_registry():
+        dpg.add_mouse_click_handler(
+            button=0, 
+            callback=add_droplet,
+            user_data=app 
+            )
+def delete_droplet_manually(sender, app_data, app):
+    def delete_droplet(sender,data,app):
+        if dpg.is_item_hovered(item_tags.image_plot_workspace): 
+            print("Delete :")
+            # get droplet loc 
+            loc = dpg.get_plot_mouse_pos()
+            list_loc = [[round(loc) for loc in loc]]    # print(locs[0])    [140, 141]
+            try_locs = utils.find_rect_locs(list_loc[0],list_loc,app.rectangle_size)
+            # delete droplet loc
+            for try_loc in try_locs:
+                if try_loc in app.droplet_dict_locs[(app.target_type_names)[app.target_type]]:
+                    print(app.droplet_dict_locs[(app.target_type_names)[app.target_type]])
+                    app.droplet_dict_locs[(app.target_type_names)[app.target_type]].remove(try_loc)
+            print("app.droplet_dict_locs:",app.droplet_dict_locs)
+            utils.draw_rectangle(
+                buff_data = app.buff_data,
+                texture_name = (item_tags.detection_tags)[app.target_type],
+                droplet_locs = app.droplet_dict_locs[(app.target_type_names)[app.target_type]],
+                rect_color = app.droplet_dict_colors[(app.target_type_names)[app.target_type]],
+                rectangle_size = app.rectangle_size,
+                )
+        else:
+            print("Outside the plot")
+    with dpg.handler_registry():
+        dpg.add_mouse_click_handler(
+            button=0,
+            callback=delete_droplet ,
+            user_data=app 
+            )
 
