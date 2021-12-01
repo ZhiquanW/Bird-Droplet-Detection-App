@@ -1,3 +1,4 @@
+from typing import ItemsView
 import dearpygui.dearpygui as dpg
 from collections import namedtuple
 
@@ -177,16 +178,25 @@ def update_blue_offset(sender, app_data, app):
     )
 
 
-def switch_raw_texture(sender, app_data, app):
+def select_display_raw_texture(sender, app_data, app:app):
     if not check_image_loaded(app):
         return
     texture_tag = app_data
     texture_idx = item_tags.texture_tags.index(texture_tag)
+    app.display_raw_texture_type = texture_idx
     # disable all textures:
     for i in range(len(app.texture_gallery)):
         dpg.configure_item(app.texture_gallery[i].image_series_tag, show=False)
     # enable target texture
     dpg.configure_item(app.texture_gallery[texture_idx].image_series_tag, show=True)
+def switch_display_raw_texture(sender,app_data,app:app):
+    app.display_raw_texture_type += 1
+    app.display_raw_texture_type %= len(app.texture_gallery)-1
+    # disable all textures:
+    for i in range(len(app.texture_gallery)):
+        dpg.configure_item(app.texture_gallery[i].image_series_tag, show=False)
+    # enable target texture
+    dpg.configure_item(app.texture_gallery[app.display_raw_texture_type].image_series_tag, show=True)
 
 
 def update_padding(sender, app_data, app):
@@ -204,7 +214,6 @@ def update_win_size(sender, app_data, app):
 def swtich_target_type(sender, app_data, app):
     # names = ("Type One", "Type Two", "Type Three", "Type Four", "Type Five")
     # target_type = names.index(app_data)
-    print(app_data)
     target_type = app.target_type_names.index(app_data)
     app.target_type = target_type
     # print("ctarget type: {d}".format(d=names[app.target_type]))
@@ -273,13 +282,15 @@ def rect_color(sender, app_data, app):
 
 
 def switch_droplet_manual_detectio_mode(sender, app_data, app: app):
-    app.enable_maunal_detection_mode = not app.enable_maunal_detection_mode
-    print("[switch_droplet_manual_detectio_mode]", app.enable_maunal_detection_mode)
+    # print(app.enable_manual_detection_mode)
+    app.enable_manual_detection_mode = not app.enable_manual_detection_mode
+    dpg.set_value(app.item_tag_dict[item_tags.maunal_mode_radio],app.enable_manual_detection_mode)
+    print("[switch_droplet_manual_detectio_mode]", app.enable_manual_detection_mode)
 
 
 def operate_droplet_manually(sender, app_data, app: app):
     # check if maunal detection mode is enabled
-    if app.enable_maunal_detection_mode:
+    if app.enable_manual_detection_mode:
         if dpg.is_item_hovered(item_tags.image_plot_workspace):
             # get droplet loc
             mouse_loc = dpg.get_plot_mouse_pos()
@@ -324,55 +335,3 @@ def operate_droplet_manually(sender, app_data, app: app):
                 print("app.droplet_dict_locs:", app.droplet_dict_locs)
         else:
             print("Outside the plot")
-
-
-def delete_droplet_manually(sender, app_data, app):
-    def delete_droplet(sender, data, app):
-        if dpg.is_item_hovered(item_tags.image_plot_workspace):
-            print("Delete :")
-            # get droplet loc
-            loc = dpg.get_plot_mouse_pos()
-            list_loc = [[round(loc) for loc in loc]]  # print(locs[0])    [140, 141]
-            try_locs = utils.find_nearest_droplet_by_type(
-                list_loc[0], list_loc, app.rectangle_size
-            )
-            # delete droplet loc
-            for try_loc in try_locs:
-                if (
-                    try_loc
-                    in app.droplet_dict_locs[(app.target_type_names)[app.target_type]]
-                ):
-                    print(
-                        app.droplet_dict_locs[(app.target_type_names)[app.target_type]]
-                    )
-                    app.droplet_dict_locs[
-                        (app.target_type_names)[app.target_type]
-                    ].remove(try_loc)
-            print("app.droplet_dict_locs:", app.droplet_dict_locs)
-            utils.draw_rectangle(
-                buff_data=app.buff_data,
-                texture_name=(item_tags.detection_tags)[app.target_type],
-                droplet_locs=app.droplet_dict_locs[
-                    (app.target_type_names)[app.target_type]
-                ],
-                rect_color=app.droplet_dict_colors[
-                    (app.target_type_names)[app.target_type]
-                ],
-                rectangle_size=app.rectangle_size,
-            )
-        else:
-            print("Outside the plot")
-
-    with dpg.handler_registry():
-        dpg.add_mouse_click_handler(button=0, callback=delete_droplet, user_data=app)
-
-
-def enable_delete_mode(sender, app_data, app: app):
-    app.is_control_key_down = True
-    print("[enable_delete_mode]", app.is_control_key_down)
-
-
-def disable_delete_mode(sender, app_data, app: app):
-    app.is_control_key_down = False
-    print("[disable_delete_mode]", app.is_control_key_down)
-

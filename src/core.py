@@ -115,7 +115,6 @@ class app:
         self.stride = 2
         self.target_type = 0
         self.target_device = torch.device("cpu")
-        self.enable_maunal_detection_mode = True
         self.image_loaded = False
         self.default_font = None
         self.item_tag_dict = {}
@@ -152,6 +151,9 @@ class app:
             "Type Five": "blue",
         }
         self.is_control_key_down = False
+        # UI params
+        self.enable_manual_detection_mode = False
+        self.display_raw_texture_type = 0
 
     def __load_models(self):
         for i in range(5):
@@ -230,14 +232,6 @@ class app:
                 enabled=True,
             )
 
-            self.item_tag_dict["num_threads"] = dpg.add_input_int(
-                label="num threads",
-                width=400,
-                min_value=1,
-                default_value=1,
-                user_data=self,
-                enabled=True,
-            )
             self.item_tag_dict["detect"] = dpg.add_button(
                 label="detect",
                 callback=callbacks.detect_droplets,
@@ -255,7 +249,7 @@ class app:
                 ("Bright_Field", "Blue_Field", "Heatmap"),
                 horizontal=True,
                 user_data=self,
-                callback=callbacks.switch_raw_texture,
+                callback=callbacks.select_display_raw_texture,
                 enabled=True,
             )
             self.item_tag_dict["padding"] = dpg.add_input_int(
@@ -301,12 +295,11 @@ class app:
             item_tags.image_plot_workspace, item_tags.workspace_handler
         )
         with dpg.handler_registry(tag=item_tags.keyboard_handler) :
-            # k_down = dpg.add_key_down_handler(key=dpg.mvKey_A)
-            k_release = dpg.add_key_release_handler(
-                key=dpg.mvKey_Control, callback=callbacks.enable_delete_mode,user_data=self,
+            dpg.add_key_release_handler(
+                key=dpg.mvKey_Tab, callback=callbacks.switch_display_raw_texture,user_data=self,
             )
-            k_press = dpg.add_key_press_handler(
-                key=dpg.mvKey_Control, callback=callbacks.disable_delete_mode,user_data=self
+            dpg.add_key_release_handler(
+                key=dpg.mvKey_M, callback=callbacks.switch_droplet_manual_detectio_mode,user_data=self,
             )
         dpg.bind_item_handler_registry(
             item_tags.image_plot_workspace, item_tags.keyboard_handler
@@ -319,11 +312,11 @@ class app:
             pos=(650, 460),
             show=True,
         ):
-            self.item_tag_dict["maunal_mode_radio"] = dpg.add_checkbox(
+            self.item_tag_dict[item_tags.maunal_mode_radio] = dpg.add_checkbox(
                 label="maunal mode",
                 user_data=self,
                 callback=callbacks.switch_droplet_manual_detectio_mode,
-                default_value=self.enable_maunal_detection_mode,
+                default_value=self.enable_manual_detection_mode,
             )
             self.rect_item_tag_dict["rect_size"] = dpg.add_slider_int(
                 label="rectangle size",
@@ -332,18 +325,6 @@ class app:
                 min_value=4,
                 max_value=10,
                 callback=callbacks.set_rect_size,
-                user_data=self,
-                enabled=True,
-            )
-            self.rect_item_tag_dict["add_droplet_manually"] = dpg.add_button(
-                label="add droplet",
-                callback=callbacks.operate_droplet_manually,
-                user_data=self,
-                enabled=True,
-            )
-            self.rect_item_tag_dict["delete_droplet_manually"] = dpg.add_button(
-                label="delete droplet",
-                callback=callbacks.delete_droplet_manually,
                 user_data=self,
                 enabled=True,
             )
