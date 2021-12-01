@@ -193,98 +193,109 @@ class app:
 
     def __create_main_panel(self):
         with dpg.window(label="Main", tag=item_tags.main_window):
-            self.item_tag_dict["image_selector"] = dpg.add_button(
-                label="Image Selector",
-                callback=lambda: dpg.show_item(item_tags.file_dialog_image_select),
-            )
-            dpg.add_text(
-                "bright image: {img_name}".format(
-                    img_name=""
-                    if self.img_pair.bright is None
-                    else self.img_pair.bright.split("/")[-1],
-                ),
-                tag="main_panel_bright_img_id",
-            )
-            dpg.add_text(
-                "blue image: {img_name}".format(
-                    img_name=""
-                    if self.img_pair.blue is None
-                    else self.img_pair.blue.split("/")[-1],
-                ),
-                tag="main_panel_blue_img_id",
-            )
+            with dpg.child_window(autosize_x=True,height=80):
+                with dpg.table(header_row=False):
+                    # use add_table_column to add columns to the table,
+                    # table columns use child slot 0
+                    dpg.add_table_column()
+                    dpg.add_table_column()
+                    dpg.add_table_column()
+                    with dpg.table_row():
+                        self.item_tag_dict[item_tags.image_selector] = dpg.add_button(
+                                label="Image Selector",
+                                callback=lambda: dpg.show_item(item_tags.file_dialog_image_select),
+                            )
+                        dpg.add_text(
+                            "bright image: {img_name}".format(
+                                img_name=""
+                                if self.img_pair.bright is None
+                                else self.img_pair.bright.split("/")[-1],
+                            ),
+                            tag="main_panel_bright_img_id",
+                        )
+                        dpg.add_text(
+                            "blue image: {img_name}".format(
+                                img_name=""
+                                if self.img_pair.blue is None
+                                else self.img_pair.blue.split("/")[-1],
+                            ),
+                            tag="main_panel_blue_img_id",
+                        )
+            # with dpg.child_window(autosize_y=True)
+            with dpg.group(horizontal=True):
+                with dpg.child_window(autosize_y=True, width=1000):
+                    self.item_tag_dict["offset_slider"] = dpg.add_slider_intx(
+                        label="blue image offset",
+                        size=2,
+                        callback=callbacks.update_blue_offset,
+                        user_data=self,
+                        enabled=True,
+                        min_value=-100,
+                        max_value=100,
+                        width=400
+                    )
+                    self.item_tag_dict["device_selector"] = dpg.add_radio_button(
+                        ("cpu", "gpu"),
+                        default_value="cpu",
+                        horizontal=True,
+                        callback=callbacks.set_device,
+                        user_data=app,
+                        enabled=True,
+                    )
 
-            self.item_tag_dict["offset_slider"] = dpg.add_slider_intx(
-                label="blue image offset",
-                size=2,
-                callback=callbacks.update_blue_offset,
-                user_data=self,
-                enabled=True,
-                min_value=-100,
-                max_value=100,
-            )
-            self.item_tag_dict["device_selector"] = dpg.add_radio_button(
-                ("cpu", "gpu"),
-                default_value="cpu",
-                horizontal=True,
-                callback=callbacks.set_device,
-                user_data=app,
-                enabled=True,
-            )
+                    self.item_tag_dict[item_tags.auto_detection_button] = dpg.add_button(
+                        label="auto detection",
+                        callback=callbacks.detect_droplets,
+                        user_data=self,
+                        enabled=True,
+                    )
+                    self.item_tag_dict[item_tags.target_droplet_type_radio] = dpg.add_radio_button(
+                        ("Type One", "Type Two", "Type Three", "Type Four", "Type Five"),
+                        horizontal=True,
+                        callback=callbacks.swtich_target_type,
+                        user_data=self,
+                        enabled=True,
+                    )
+                    self.item_tag_dict[item_tags.display_texture_radio] = dpg.add_radio_button(
+                        ("Bright_Field", "Blue_Field", "Heatmap"),
+                        horizontal=True,
+                        user_data=self,
+                        callback=callbacks.select_display_raw_texture,
+                        enabled=True,
+                    )
+                    self.item_tag_dict["padding"] = dpg.add_input_int(
+                        label="Padding", width=400, default_value=7, enabled=True
+                    )
+                    self.item_tag_dict["stride"] = dpg.add_input_int(
+                        label="Stride", width=400, default_value=2, enabled=True
+                    )
+                    self.item_tag_dict["winsize"] = dpg.add_input_int(
+                        label="Window Size", width=400, default_value=10, enabled=True
+                    )
+                with dpg.child_window(autosize_x=True):
+                    dpg.add_plot(
+                        label="Image Plot",
+                        height=-1,
+                        width=-1,
+                        tag=item_tags.image_plot_workspace,
+                        equal_aspects=True,
+                        crosshairs=True,
+                        box_select_button=True,
+                    )
+                    dpg.add_plot_legend(parent=item_tags.image_plot_workspace)
 
-            self.item_tag_dict["detect"] = dpg.add_button(
-                label="detect",
-                callback=callbacks.detect_droplets,
-                user_data=self,
-                enabled=True,
-            )
-            self.item_tag_dict["type_radio"] = dpg.add_radio_button(
-                ("Type One", "Type Two", "Type Three", "Type Four", "Type Five"),
-                horizontal=True,
-                callback=callbacks.swtich_target_type,
-                user_data=self,
-                enabled=True,
-            )
-            self.item_tag_dict["texture_radio"] = dpg.add_radio_button(
-                ("Bright_Field", "Blue_Field", "Heatmap"),
-                horizontal=True,
-                user_data=self,
-                callback=callbacks.select_display_raw_texture,
-                enabled=True,
-            )
-            self.item_tag_dict["padding"] = dpg.add_input_int(
-                label="Padding", width=400, default_value=7, enabled=True
-            )
-            self.item_tag_dict["stride"] = dpg.add_input_int(
-                label="Stride", width=400, default_value=2, enabled=True
-            )
-            self.item_tag_dict["winsize"] = dpg.add_input_int(
-                label="Window Size", width=400, default_value=10, enabled=True
-            )
-
-            dpg.add_plot(
-                label="Image Plot",
-                height=-1,
-                width=-1,
-                tag=item_tags.image_plot_workspace,
-                equal_aspects=True,
-                crosshairs=True,
-                box_select_button=True,
-            )
-            dpg.add_plot_legend(parent=item_tags.image_plot_workspace)
-
-            self.xaxis = dpg.add_plot_axis(
-                dpg.mvXAxis,
-                label="x axis",
-                invert=False,
-                parent=item_tags.image_plot_workspace,
-            )
-            self.yaxis = dpg.add_plot_axis(
-                dpg.mvYAxis,
-                label="y axis",
-                invert=True,
-                parent=item_tags.image_plot_workspace,
-            )
+                    self.xaxis = dpg.add_plot_axis(
+                        dpg.mvXAxis,
+                        label="x axis",
+                        invert=False,
+                        parent=item_tags.image_plot_workspace,
+                    )
+                    self.yaxis = dpg.add_plot_axis(
+                        dpg.mvYAxis,
+                        label="y axis",
+                        invert=True,
+                        parent=item_tags.image_plot_workspace,
+                    )
 
     def handler_registry(self):
         with dpg.handler_registry(tag=item_tags.workspace_handler) as handler:
@@ -306,9 +317,9 @@ class app:
         )
 
     def __setting_rect_group(self):
-        with dpg.group(
+        with dpg.window(
             tag="setting rect group",
-            parent=item_tags.main_window,
+            # parent=item_tags.main_window,
             pos=(650, 460),
             show=True,
         ):
@@ -333,7 +344,6 @@ class app:
                 no_side_preview=True,
                 display_hex=False,
                 callback=callbacks.rect_color,
-                pos=(1200, 220),
                 width=280,
                 height=280,
                 user_data=self,

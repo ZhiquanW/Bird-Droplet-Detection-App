@@ -3,6 +3,8 @@ from dearpygui.dearpygui import file_dialog
 import dearpygui.dearpygui as dpg
 import uuid
 
+from numpy import iinfo
+
 
 class item_tags:
     file_dialog_image_select = "file_dialog_" + str(uuid.uuid4())
@@ -13,4 +15,7 @@ class item_tags:
     texture_tags = ["Bright_Field", "Blue_Field", "Heatmap"]
     detection_tags = ["type_one", "type_two", "type_three", "type_four", "type_five"]
     maunal_mode_radio = "maunal_mode_radio" + str(uuid.uuid4())
-
+    auto_detection_button = "auto_detection_button"+str(uuid.uuid4())
+    target_droplet_type_radio = "target_droplet_type_radio" + str(uuid.uuid4())
+    display_texture_radio = "display_texture_radio" + str(uuid.uuid4())
+    image_selector = "image_selector"+str(uuid.uuid4())

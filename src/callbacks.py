@@ -285,7 +285,6 @@ def switch_droplet_manual_detectio_mode(sender, app_data, app: app):
     # print(app.enable_manual_detection_mode)
     app.enable_manual_detection_mode = not app.enable_manual_detection_mode
     dpg.set_value(app.item_tag_dict[item_tags.maunal_mode_radio],app.enable_manual_detection_mode)
-    print("[switch_droplet_manual_detectio_mode]", app.enable_manual_detection_mode)
 
 
 def operate_droplet_manually(sender, app_data, app: app):
@@ -300,7 +299,6 @@ def operate_droplet_manually(sender, app_data, app: app):
                     app.droplet_dict_locs[app.target_type_names[app.target_type]],
                     app.rectangle_size,
                 )
-                print("nearest loc", nearest_droplet_id)
                 if nearest_droplet_id > -1:
                     app.droplet_dict_locs[app.target_type_names[app.target_type]].pop(
                         nearest_droplet_id
