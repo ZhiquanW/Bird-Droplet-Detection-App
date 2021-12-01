@@ -103,29 +103,55 @@ class app:
         self.detection_data = [[], [], [], [], []]
         self.texture_gallery = []
         self.detection_gallery = []
-       
+
         self.image_spacing = 20
         self.xaxis = None
         self.yaxis = None
         self.blue_offset = np.array([0, 0])
         self.legend = None
-        self.batch_size = (64,)
+        self.batch_size = 64
         self.winsize = 10
         self.padding = 7
         self.stride = 2
         self.target_type = 0
         self.target_device = torch.device("cpu")
+        self.enable_maunal_detection_mode = True
         self.image_loaded = False
         self.default_font = None
         self.item_tag_dict = {}
         self.rect_item_tag_dict = {}
         self.buff_data = None
-        self.img_size = [None,None]
+        self.img_size = [None, None]
         self.rectangle_size = 6
-        self.target_type_names = ("Type One", "Type Two", "Type Three", "Type Four", "Type Five")
-        self.droplet_dict_locs = {"Type One":None, "Type Two":None, "Type Three":None, "Type Four":None, "Type Five":None}
-        self.droplet_dict_num = {"Type One":None, "Type Two":None, "Type Three":None, "Type Four":None, "Type Five":None}
-        self.droplet_dict_colors = {"Type One":"red", "Type Two":"white", "Type Three":"green", "Type Four":"yellow", "Type Five":"blue"}
+        self.target_type_names = (
+            "Type One",
+            "Type Two",
+            "Type Three",
+            "Type Four",
+            "Type Five",
+        )
+        self.droplet_dict_locs = {
+            "Type One": [],
+            "Type Two": [],
+            "Type Three": [],
+            "Type Four": [],
+            "Type Five": [],
+        }
+        self.droplet_dict_num = {
+            "Type One": [],
+            "Type Two": [],
+            "Type Three": [],
+            "Type Four": [],
+            "Type Five": [],
+        }
+        self.droplet_dict_colors = {
+            "Type One": "red",
+            "Type Two": "white",
+            "Type Three": "green",
+            "Type Four": "yellow",
+            "Type Five": "blue",
+        }
+        self.is_control_key_down = False
 
     def __load_models(self):
         for i in range(5):
@@ -161,6 +187,7 @@ class app:
     def __create_ui_layout(self):
         self._create_file_selector()
         self.__create_main_panel()
+        self.__setting_rect_group()
 
     def __create_main_panel(self):
         with dpg.window(label="Main", tag=item_tags.main_window):
@@ -190,7 +217,7 @@ class app:
                 size=2,
                 callback=callbacks.update_blue_offset,
                 user_data=self,
-                enabled=False,
+                enabled=True,
                 min_value=-100,
                 max_value=100,
             )
@@ -200,7 +227,7 @@ class app:
                 horizontal=True,
                 callback=callbacks.set_device,
                 user_data=app,
-                enabled=False,
+                enabled=True,
             )
 
             self.item_tag_dict["num_threads"] = dpg.add_input_int(
@@ -209,36 +236,36 @@ class app:
                 min_value=1,
                 default_value=1,
                 user_data=self,
-                enabled=False,
+                enabled=True,
             )
             self.item_tag_dict["detect"] = dpg.add_button(
                 label="detect",
                 callback=callbacks.detect_droplets,
                 user_data=self,
-                enabled=False,
+                enabled=True,
             )
             self.item_tag_dict["type_radio"] = dpg.add_radio_button(
                 ("Type One", "Type Two", "Type Three", "Type Four", "Type Five"),
                 horizontal=True,
                 callback=callbacks.swtich_target_type,
                 user_data=self,
-                enabled=False,
+                enabled=True,
             )
             self.item_tag_dict["texture_radio"] = dpg.add_radio_button(
                 ("Bright_Field", "Blue_Field", "Heatmap"),
                 horizontal=True,
                 user_data=self,
                 callback=callbacks.switch_raw_texture,
-                enabled=False,
+                enabled=True,
             )
             self.item_tag_dict["padding"] = dpg.add_input_int(
-                label="Padding", width=400, default_value=7, enabled=False
+                label="Padding", width=400, default_value=7, enabled=True
             )
             self.item_tag_dict["stride"] = dpg.add_input_int(
-                label="Stride", width=400, default_value=2, enabled=False
+                label="Stride", width=400, default_value=2, enabled=True
             )
             self.item_tag_dict["winsize"] = dpg.add_input_int(
-                label="Window Size", width=400, default_value=10, enabled=False
+                label="Window Size", width=400, default_value=10, enabled=True
             )
 
             dpg.add_plot(
@@ -248,32 +275,56 @@ class app:
                 tag=item_tags.image_plot_workspace,
                 equal_aspects=True,
                 crosshairs=True,
-                box_select_button = True
+                box_select_button=True,
             )
-            dpg.add_plot_legend(parent =item_tags.image_plot_workspace)
+            dpg.add_plot_legend(parent=item_tags.image_plot_workspace)
 
-            app.xaxis = dpg.add_plot_axis(
+            self.xaxis = dpg.add_plot_axis(
                 dpg.mvXAxis,
                 label="x axis",
                 invert=False,
                 parent=item_tags.image_plot_workspace,
             )
-            app.yaxis = dpg.add_plot_axis(
+            self.yaxis = dpg.add_plot_axis(
                 dpg.mvYAxis,
                 label="y axis",
                 invert=True,
                 parent=item_tags.image_plot_workspace,
             )
-    # def handler_registry(self):
-    #     with dpg.handler_registry(tag=item_tags.workspace_handler) as handler:
-    #         dpg.add_mouse_click_handler(
-    #             button=0, callback=callbacks.add_droplet_manually, user_data=self
-    #         )
-    #     dpg.bind_item_handler_registry(
-    #         item_tags.image_plot_workspace, item_tags.workspace_handler
-    #     )
+
+    def handler_registry(self):
+        with dpg.handler_registry(tag=item_tags.workspace_handler) as handler:
+            dpg.add_mouse_click_handler(
+                button=0, callback=callbacks.operate_droplet_manually, user_data=self
+            )
+        dpg.bind_item_handler_registry(
+            item_tags.image_plot_workspace, item_tags.workspace_handler
+        )
+        with dpg.handler_registry(tag=item_tags.keyboard_handler) :
+            # k_down = dpg.add_key_down_handler(key=dpg.mvKey_A)
+            k_release = dpg.add_key_release_handler(
+                key=dpg.mvKey_Control, callback=callbacks.enable_delete_mode,user_data=self,
+            )
+            k_press = dpg.add_key_press_handler(
+                key=dpg.mvKey_Control, callback=callbacks.disable_delete_mode,user_data=self
+            )
+        dpg.bind_item_handler_registry(
+            item_tags.image_plot_workspace, item_tags.keyboard_handler
+        )
+
     def __setting_rect_group(self):
-        with dpg.group(tag="setting rect group",parent=item_tags.main_window,pos=(650,460),show=False):
+        with dpg.group(
+            tag="setting rect group",
+            parent=item_tags.main_window,
+            pos=(650, 460),
+            show=True,
+        ):
+            self.item_tag_dict["maunal_mode_radio"] = dpg.add_checkbox(
+                label="maunal mode",
+                user_data=self,
+                callback=callbacks.switch_droplet_manual_detectio_mode,
+                default_value=self.enable_maunal_detection_mode,
+            )
             self.rect_item_tag_dict["rect_size"] = dpg.add_slider_int(
                 label="rectangle size",
                 width=200,
@@ -282,31 +333,31 @@ class app:
                 max_value=10,
                 callback=callbacks.set_rect_size,
                 user_data=self,
-                enabled=False
-                )
+                enabled=True,
+            )
             self.rect_item_tag_dict["add_droplet_manually"] = dpg.add_button(
                 label="add droplet",
-                callback = callbacks.add_droplet_manually,
+                callback=callbacks.operate_droplet_manually,
                 user_data=self,
-                enabled=False
-                )
+                enabled=True,
+            )
             self.rect_item_tag_dict["delete_droplet_manually"] = dpg.add_button(
                 label="delete droplet",
-                callback = callbacks.delete_droplet_manually,
+                callback=callbacks.delete_droplet_manually,
                 user_data=self,
-                enabled=False
-                )
+                enabled=True,
+            )
             self.rect_item_tag_dict["rect_color"] = dpg.add_color_picker(
                 label="rectangle color",
                 no_side_preview=True,
                 display_hex=False,
                 callback=callbacks.rect_color,
-                pos=(1200,220),
+                pos=(1200, 220),
                 width=280,
                 height=280,
                 user_data=self,
-                enabled=False
-                )        
+                enabled=True,
+            )
 
     def launch(self):
         dpg.create_context()
@@ -314,7 +365,7 @@ class app:
         self.__load_models()
         self.__set_font()
         self.__create_ui_layout()
-        self.__setting_rect_group()
+        self.handler_registry()
         dpg.setup_dearpygui()
         dpg.show_viewport()
         dpg.set_primary_window(item_tags.main_window, True)
@@ -329,8 +380,8 @@ class app:
             "current_path": "/home/zhiquan/projects/Bird-Droplet-Detection-App/src/data",
             "current_filter": ".*",
             "selections": {
-                "HAGO101_LE_PB_10-30-2019_Site_225_BF.tiff": "/home/zhiquan/projects/Bird-Droplet-Detection-App/src/data/HAGO101_LE_PB_10-30-2019_Site_225_BF.tiff",
-                "HAGO101_LE_PB_10-30-2019_Site_225_E.tiff": "/home/zhiquan/projects/Bird-Droplet-Detection-App/src/data/HAGO101_LE_PB_10-30-2019_Site_225_E.tiff",
+                "PKDK_105_LE_PB_7-6-2020_Acquired Images_09-24-2020_030_BF.tif": "/home/zhiquan/projects/Bird-Droplet-Detection-App/src/data/test_0_BF.tif",
+                "PKDK_105_LE_PB_7-6-2020_Acquired Images_09-24-2020_030_E.tif": "/home/zhiquan/projects/Bird-Droplet-Detection-App/src/data/test_0_E.tif",
             },
         }
         callbacks.image_selector_callback(None, app_data, self)

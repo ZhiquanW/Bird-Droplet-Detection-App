@@ -3,7 +3,6 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 tmp_file_path = os.path.join(os.getcwd(), "data/101_reye_3_bf.png")
-import dearpygui.logger as dpg_logger
 
 def add_and_load_image(image_path="", parent=None):
     image_path = tmp_file_path
