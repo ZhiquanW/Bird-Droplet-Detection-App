@@ -352,5 +352,8 @@ def update_target_area_bottom_right(sender,app_data,app:app):
 def crop_target_area(sender,app_data,app:app):
     print(app.img_pair.bright)
     h0,h1,w0,w1 = utils.crop_rg_image(app.img_pair.bright)
+    print(h0)
     app.target_area_top_left = [h0,w0]
     app.target_area_bottom_right = [h1,w1]
+    dpg.set_value(app.item_tag_dict[item_tags.target_area_top_left_slider],[h0,w0])
+    print("A")

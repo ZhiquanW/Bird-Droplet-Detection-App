@@ -178,6 +178,7 @@ class app:
             dpg.add_file_extension(".*", color=(255, 255, 255, 255))
             dpg.add_file_extension(".png", color=(0, 255, 0, 255))
             dpg.add_file_extension(".tiff", color=(0, 255, 255, 255))
+            dpg.add_file_extension(".tif", color=(0, 255, 255, 255))
 
     def __set_font(self):
         # add a font registry
@@ -259,7 +260,7 @@ class app:
                             user_data=self,
                         )
                     with dpg.collapsing_header(label="Detection Configuration",default_open= True):
-                        self.item_tag_dict[item_tags.target_area_slider] = dpg.add_slider_intx(
+                        self.item_tag_dict[item_tags.target_area_top_left_slider] = dpg.add_slider_intx(
                             label="target area: top left",
                             size=2,
                             callback=callbacks.update_target_area_top_left,

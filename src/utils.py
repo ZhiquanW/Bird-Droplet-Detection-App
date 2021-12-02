@@ -966,11 +966,9 @@ def crop_target_area_rg(
     for h in range(H):
         for w in range(W):
             for color in template_colors:
-                # print(img_rgb[h,w],color)
                 if (img_bgr[h, w] == color).all():
                     detected_img[h, w] = np.array([255, 255, 255])
                     break
-    # img = cv2.cvtColor(detected_img, cv2.COLOR_BGR2RGB)
     return img_bgr, detected_img
 
 
