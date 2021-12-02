@@ -214,6 +214,7 @@ def update_win_size(sender, app_data, app):
 def swtich_target_type(sender, app_data, app):
     # names = ("Type One", "Type Two", "Type Three", "Type Four", "Type Five")
     # target_type = names.index(app_data)
+    print(app_data)
     target_type = app.target_type_names.index(app_data)
     app.target_type = target_type
     # print("ctarget type: {d}".format(d=names[app.target_type]))
