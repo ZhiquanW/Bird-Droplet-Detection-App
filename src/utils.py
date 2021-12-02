@@ -928,3 +928,54 @@ def find_nearest_droplet_by_type(mouse_loc, droplet_locs, find_size=6):
             min_idx = id_counter
         id_counter += 1
     return min_idx
+
+def find_anchor(b_img, detect_len):
+    height, width, _ = b_img.shape
+    white_pixel_vertical = np.zeros(width)
+    white_pixel_horizental = np.zeros(height)
+
+    for h in range(height):
+        for w in range(width - 1):
+            start_id = w
+            end_id = min(w + detect_len, width - 1)
+            white_pixel_horizental[h] += np.sum(
+                b_img[h, start_id:end_id]
+            ) == 3 * 255.0 * (end_id - start_id)
+    h_max_2_idx = np.argpartition(white_pixel_horizental, -2)[-2:]
+    for w in range(width):
+        for h in range(height - 1):
+            start_id = h
+            end_id = min(h + detect_len, height - 1)
+            white_pixel_vertical[w] += np.sum(
+                b_img[start_id:end_id, w]
+            ) == 3 * 255.0 * (end_id - start_id)
+    # print(np.argpartition(white_pixel_vertical, -2))
+    v_max_2_idx = np.argpartition(white_pixel_vertical, -2)[-2:]
+    # print(v_max_2_idx)
+    h_0, h_1 = h_max_2_idx
+    v_0, v_1 = v_max_2_idx
+    return min(h_0, h_1) + 1, max(h_0, h_1) - 1, min(v_0, v_1) + 1, max(v_0, v_1) - 1
+
+
+def crop_target_area_rg(
+    img_bgr, template_colors: List = [np.array([128, 0, 0]), np.array([0, 255, 0])]
+):
+    img_bgr = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
+    detected_img = np.zeros_like(img_bgr)
+    H, W, _ = img_bgr.shape
+    for h in range(H):
+        for w in range(W):
+            for color in template_colors:
+                # print(img_rgb[h,w],color)
+                if (img_bgr[h, w] == color).all():
+                    detected_img[h, w] = np.array([255, 255, 255])
+                    break
+    # img = cv2.cvtColor(detected_img, cv2.COLOR_BGR2RGB)
+    return img_bgr, detected_img
+
+
+def crop_rg_image(img_address):
+    img_bgr = cv2.imread(img_address)
+    _, detected_img = crop_target_area_rg(img_bgr)
+    h_0, h_1, v_0, v_1 = find_anchor(detected_img, 10)
+    return h_0,h_1,v_0,v_1

@@ -19,3 +19,7 @@ class item_tags:
     target_droplet_type_combo = "target_droplet_type_combo" + str(uuid.uuid4())
     display_texture_radio = "display_texture_radio" + str(uuid.uuid4())
     image_selector = "image_selector"+str(uuid.uuid4())
+    device_selector = "device_selector" + str(uuid.uuid4())
+    target_area_slider = "target_area_slider" + str(uuid.uuid4())
+    blue_img_offset_slider = "blue_img_offset_slider" + str(uuid.uuid4())
+    crop_target_area_bottom = "crop_target_area_bottom" + str(uuid.uuid4())

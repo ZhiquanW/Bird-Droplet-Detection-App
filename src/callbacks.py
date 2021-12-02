@@ -108,6 +108,8 @@ def image_selector_callback(sender, app_data, app: app):
     app.texture_gallery.append(hm_img_cell)
     # inform app that the image is loaed
     app.image_loaded = True
+
+    # crop target area
     enable_all_items(app)
 
 
@@ -334,3 +336,21 @@ def operate_droplet_manually(sender, app_data, app: app):
                 print("app.droplet_dict_locs:", app.droplet_dict_locs)
         else:
             print("Outside the plot")
+
+def update_target_area_top_left(sender,app_data,app:app):
+    if not check_image_loaded(app):
+        return
+    app.target_area_top_left = [app_data[0],app_data[1]]
+
+
+def update_target_area_bottom_right(sender,app_data,app:app):
+    if not check_image_loaded(app):
+        return
+    app.target_area_bottom_right = [app_data[0],app_data[1]]
+
+
+def crop_target_area(sender,app_data,app:app):
+    print(app.img_pair.bright)
+    h0,h1,w0,w1 = utils.crop_rg_image(app.img_pair.bright)
+    app.target_area_top_left = [h0,w0]
+    app.target_area_bottom_right = [h1,w1]
