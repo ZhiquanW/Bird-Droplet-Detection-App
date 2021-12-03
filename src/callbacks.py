@@ -1,3 +1,4 @@
+import os
 from typing import ItemsView
 import dearpygui.dearpygui as dpg
 from collections import namedtuple
@@ -11,6 +12,7 @@ import numpy as np
 import utils
 from tags import *
 from core import app
+import csv
 
 ImgPathPair = namedtuple("ImgPair", ["bright", "blue"])
 
@@ -22,11 +24,24 @@ def image_selector_callback(sender, user_data, app: app):
     # dpg_utils.clear_drawlist(item_tags.texture_tags)
     dpg_utils.clear_drawlist(item_tags.detection_tags)
     dpg_utils.clear_drawlist([item_tags.target_ara_texture])
-    app.blue_offset = [0,0]
-    app.target_area_bottom_right = [0,0]
-    app.target_area_top_left = [0,0]
+    app.blue_offset = [0, 0]
+    app.target_area_bottom_right = [0, 0]
+    app.target_area_top_left = [0, 0]
     app.detection_data = [[], [], [], [], []]
-
+    app.droplet_dict_locs = {
+        "Type One": [],
+        "Type Two": [],
+        "Type Three": [],
+        "Type Four": [],
+        "Type Five": [],
+    }
+    app.droplet_dict_num = {
+        "Type One": [],
+        "Type Two": [],
+        "Type Three": [],
+        "Type Four": [],
+        "Type Five": [],
+    }
     img_keys = []
     img_types = []
     img_path = []
@@ -75,8 +90,8 @@ def image_selector_callback(sender, user_data, app: app):
     # br_img_cell = dpg_utils.add_texture_to_workspace(
     # img_path_pair.bright, item_tags.texture_tags[0], app.yaxis, True
     # )
-    print("create",item_tags.texture_tags[0])
-    br_dtexture:dpg_utils.drawable_texture = dpg_utils.add_img_texture_to_workspace(
+    print("create", item_tags.texture_tags[0])
+    br_dtexture: dpg_utils.drawable_texture = dpg_utils.add_img_texture_to_workspace(
         img_path_pair.bright, item_tags.texture_tags[0], app.yaxis, True
     )
     # blue image cell
@@ -99,9 +114,12 @@ def image_selector_callback(sender, user_data, app: app):
         )
     # target area texture
     app.target_area_dtexture = dpg_utils.add_notation_buff_to_workspace(
-        br_dtexture.size,item_tags.target_ara_texture,app.yaxis,True,True)
+        br_dtexture.size, item_tags.target_ara_texture, app.yaxis, True, True
+    )
     app.target_area_bottom_right = br_dtexture.size
-    dpg.set_value(app.item_tag_dict[item_tags.target_area_bottom_right_slider],br_dtexture.size)
+    dpg.set_value(
+        app.item_tag_dict[item_tags.target_area_bottom_right_slider], br_dtexture.size
+    )
     dpg.fit_axis_data(app.xaxis)
     dpg.fit_axis_data(app.yaxis)
     # add cell info to app
@@ -122,7 +140,7 @@ def check_image_loaded(app):
     return True
 
 
-def detect_droplets(sender, user_data, app:app):
+def detect_droplets(sender, user_data, app: app):
     if not check_image_loaded(app):
         return
     print("start detection: tpye{d}".format(d=app.target_device))
@@ -145,7 +163,9 @@ def detect_droplets(sender, user_data, app:app):
     app.droplet_num = droplet_num
     print("end detection: {d}".format(d=app.droplet_num))
     # get all droplet_locs
-    all_droplet_locs = utils.droplet_locs(predicted_map, app.img_dtexture_list[0].size[0])
+    all_droplet_locs = utils.droplet_locs(
+        predicted_map, app.img_dtexture_list[0].size[0]
+    )
     # clean_similar_locs
     print(
         "(app.target_type_names)[app.target_type]:",
@@ -157,15 +177,11 @@ def detect_droplets(sender, user_data, app:app):
     print("app.droplet_dict_locs:", app.droplet_dict_locs)
     # draw rectangle
     utils.draw_detected_droplets(
-                        dtexture=app.detection_notation_list[app.target_type],
-                        droplet_locs=app.droplet_dict_locs[
-                            app.target_type_names[app.target_type]
-                        ],
-                        rect_color=app.droplet_dict_colors[
-                            (app.target_type_names)[app.target_type]
-                        ],
-                        rectangle_size=app.rectangle_size,
-                    )
+        dtexture=app.detection_notation_list[app.target_type],
+        droplet_locs=app.droplet_dict_locs[app.target_type_names[app.target_type]],
+        rect_color=app.droplet_dict_colors[(app.target_type_names)[app.target_type]],
+        rectangle_size=app.rectangle_size,
+    )
     # set heatmap   ------闪退
     dpg_utils.set_heatmap(predicted_heatmap)
     # setting rect
@@ -174,7 +190,7 @@ def detect_droplets(sender, user_data, app:app):
     dpg.show_item("setting rect group")
 
 
-def update_blue_offset(sender, user_data, app:app):
+def update_blue_offset(sender, user_data, app: app):
     if not check_image_loaded(app):
         return
     app.blue_offset[0] = user_data[0]
@@ -187,7 +203,7 @@ def update_blue_offset(sender, user_data, app:app):
     )
 
 
-def select_display_raw_texture(sender, user_data, app:app):
+def select_display_raw_texture(sender, user_data, app: app):
     if not check_image_loaded(app):
         return
     texture_tag = user_data
@@ -198,14 +214,18 @@ def select_display_raw_texture(sender, user_data, app:app):
         dpg.configure_item(app.img_dtexture_list[i].image_series_tag, show=False)
     # enable target texture
     dpg.configure_item(app.img_dtexture_list[texture_idx].image_series_tag, show=True)
-def switch_display_raw_texture(sender,user_data,app:app):
+
+
+def switch_display_raw_texture(sender, user_data, app: app):
     app.display_raw_texture_type += 1
-    app.display_raw_texture_type %= len(app.img_dtexture_list)-1
+    app.display_raw_texture_type %= len(app.img_dtexture_list) - 1
     # disable all textures:
     for i in range(len(app.img_dtexture_list)):
         dpg.configure_item(app.img_dtexture_list[i].image_series_tag, show=False)
     # enable target texture
-    dpg.configure_item(app.img_dtexture_list[app.display_raw_texture_type].image_series_tag, show=True)
+    dpg.configure_item(
+        app.img_dtexture_list[app.display_raw_texture_type].image_series_tag, show=True
+    )
 
 
 def update_padding(sender, user_data, app):
@@ -262,42 +282,34 @@ def enable_all_rect_items(app):
 def set_rect_size(sender, user_data, app):
     app.rectangle_size = user_data
     utils.draw_detected_droplets(
-                        dtexture=app.detection_notation_list[app.target_type],
-                        droplet_locs=app.droplet_dict_locs[
-                            app.target_type_names[app.target_type]
-                        ],
-                        rect_color=app.droplet_dict_colors[
-                            app.target_type_names[app.target_type]
-                        ],
-                        rectangle_size=app.rectangle_size,
-                    )
+        dtexture=app.detection_notation_list[app.target_type],
+        droplet_locs=app.droplet_dict_locs[app.target_type_names[app.target_type]],
+        rect_color=app.droplet_dict_colors[app.target_type_names[app.target_type]],
+        rectangle_size=app.rectangle_size,
+    )
     return app.rectangle_size
 
 
 def rect_color(sender, user_data, app):
-    new_rect_color = tuple((np.array(user_data)*255.0).astype(np.uint8))
+    new_rect_color = tuple((np.array(user_data) * 255.0).astype(np.uint8))
     # add color_tuple to the droplet_dict_colors
     app.droplet_dict_colors[app.target_type_names[app.target_type]] = new_rect_color
     utils.draw_detected_droplets(
-                        dtexture=app.detection_notation_list[app.target_type],
-                        droplet_locs=app.droplet_dict_locs[
-                            app.target_type_names[app.target_type]
-                        ],
-                        rect_color=app.droplet_dict_colors[
-                            app.target_type_names[app.target_type]
-                        ],
-                        rectangle_size=app.rectangle_size,
-                    )
+        dtexture=app.detection_notation_list[app.target_type],
+        droplet_locs=app.droplet_dict_locs[app.target_type_names[app.target_type]],
+        rect_color=app.droplet_dict_colors[app.target_type_names[app.target_type]],
+        rectangle_size=app.rectangle_size,
+    )
     # print("rect_color")
-    print(app.droplet_dict_colors[
-                            app.target_type_names[app.target_type]
-                        ])
+    print(app.droplet_dict_colors[app.target_type_names[app.target_type]])
 
 
 def switch_droplet_manual_detectio_mode(sender, user_data, app: app):
     # print(app.enable_manual_detection_mode)
     app.enable_manual_detection_mode = not app.enable_manual_detection_mode
-    dpg.set_value(app.item_tag_dict[item_tags.maunal_mode_radio],app.enable_manual_detection_mode)
+    dpg.set_value(
+        app.item_tag_dict[item_tags.maunal_mode_radio], app.enable_manual_detection_mode
+    )
 
 
 def operate_droplet_manually(sender, user_data, app: app):
@@ -345,32 +357,75 @@ def operate_droplet_manually(sender, user_data, app: app):
         else:
             print("Outside the plot")
 
-def update_target_area_top_left(sender,user_data,app:app):
+
+def update_target_area_top_left(sender, user_data, app: app):
     if not check_image_loaded(app):
         return
-    app.target_area_top_left = [user_data[0],user_data[1]]
-    dpg_utils.draw_target_area_dtexture(app.target_area_dtexture,app.target_area_top_left[0],app.target_area_top_left[1],app.target_area_bottom_right[0],app.target_area_bottom_right[1])
+    app.target_area_top_left = [user_data[0], user_data[1]]
+    dpg_utils.draw_target_area_dtexture(
+        app.target_area_dtexture,
+        app.target_area_top_left[0],
+        app.target_area_top_left[1],
+        app.target_area_bottom_right[0],
+        app.target_area_bottom_right[1],
+    )
 
-def update_target_area_bottom_right(sender,user_data,app:app):
+
+def update_target_area_bottom_right(sender, user_data, app: app):
     if not check_image_loaded(app):
         return
-    app.target_area_bottom_right = [user_data[0],user_data[1]]
-    dpg_utils.draw_target_area_dtexture(app.target_area_dtexture,app.target_area_top_left[0],app.target_area_top_left[1],app.target_area_bottom_right[0],app.target_area_bottom_right[1])
+    app.target_area_bottom_right = [user_data[0], user_data[1]]
+    dpg_utils.draw_target_area_dtexture(
+        app.target_area_dtexture,
+        app.target_area_top_left[0],
+        app.target_area_top_left[1],
+        app.target_area_bottom_right[0],
+        app.target_area_bottom_right[1],
+    )
 
-def crop_target_area(sender,user_data,app:app):
-    h0,h1,w0,w1 = utils.crop_rg_image(app.img_pair.bright)
-    app.target_area_bottom_right = [h1,w1]
-    app.target_area_top_left = [h0,w0]
-    dpg.set_value(app.item_tag_dict[item_tags.target_area_top_left_slider],[h0,w0])
-    dpg.set_value(app.item_tag_dict[item_tags.target_area_bottom_right_slider],[h1,w1])
-    dpg_utils.draw_target_area_dtexture(app.target_area_dtexture,h0,w0,h1,w1)
 
-def export_image(sender,user_data,app:app):
+def crop_target_area(sender, user_data, app: app):
+    h0, h1, w0, w1 = utils.crop_rg_image(app.img_pair.bright)
+    app.target_area_bottom_right = [h1, w1]
+    app.target_area_top_left = [h0, w0]
+    dpg.set_value(app.item_tag_dict[item_tags.target_area_top_left_slider], [h0, w0])
+    dpg.set_value(
+        app.item_tag_dict[item_tags.target_area_bottom_right_slider], [h1, w1]
+    )
+    dpg_utils.draw_target_area_dtexture(app.target_area_dtexture, h0, w0, h1, w1)
+
+
+def export_image(sender, user_data, app: app):
     pass
 
-def export_data(sender,user_data,app:app):
-    pass
-def set_export_data_file(sender,user_data,app:app):
-    app.export_file_path= user_data["file_path_name"]
-    dpg.set_value(item_tags.export_path_txt,user_data["file_name"])
+
+def export_density_data(sender, user_data, app: app):
+    # if os.path.exists(app.export_file_path):
+    with open(app.density_file_path, "a") as csv_file:
+        csv_writer = csv.writer(csv_file)
+        br_img_name = app.img_pair.bright.split("/")[-1]
+        br_img_feats = br_img_name.split("_")
+        site_num = br_img_feats[-2]
+        droplets_num = [len(v) for v in app.droplet_dict_locs.values()]
+        csv_data_row = [br_img_name, site_num, np.sum(droplets_num)] + droplets_num
+        csv_writer.writerow(csv_data_row)
+
+
+def set_density_data_file(sender, user_data, app: app):
+    app.density_file_path = user_data["file_path_name"]
+    dpg.set_value(item_tags.export_path_txt, user_data["file_name"])
     print(user_data)
+
+
+def export_distances_data(sender, user_data, app: app):
+    rows = []
+    with open(app.distance_file_path, "a") as csv_file:
+        csv_writer = csv.writer(csv_file)
+        br_img_name = app.img_pair.bright.split("/")[-1]
+        br_img_feats = br_img_name.split("_")
+        site_num = br_img_feats[-2]
+        for k, v in app.droplet_dict_locs.items():
+            for loc in v:
+                row = [br_img_name, site_num, "oil droplet", k, loc[0], loc[1]]
+                rows.append(row)
+        csv_writer.writerows(rows)

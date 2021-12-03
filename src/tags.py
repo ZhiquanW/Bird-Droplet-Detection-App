@@ -27,6 +27,8 @@ class item_tags:
     blue_img_offset_slider = "blue_img_offset_slider" + str(uuid.uuid4())
     crop_target_area_bottom = "crop_target_area_bottom" + str(uuid.uuid4())
     save_image_button = "save_image_button" + str(uuid.uuid4())
+    save_density_data_button = "save_data_button" + str(uuid.uuid4())
+    save_distance_data_button = "save_distance_button" + str(uuid.uuid4())
     export_path_txt = "export_path_txt" + str(uuid.uuid4())
 class value_tags:
     export_data_file_path = "export_data_file_path"+str(uuid.uuid4())

@@ -894,8 +894,6 @@ def draw_detected_droplets(dtexture:drawable_texture, droplet_locs, rect_color, 
         x2, y2 = [loc[0] - rectangle_size, loc[1] + rectangle_size]
         # set outline
         im_draw.rectangle((x1, y1, x2, y2), outline=rect_color, width=1)
-        im_draw.rectangle((200 ,300, 400, 400), outline=(98,125,86,255), width=1)
-        im_draw.rectangle((210 ,30, 400, 400), outline="Green", width=1)
     im = im.transpose(Image.FLIP_TOP_BOTTOM)
     img_arr = np.array(im,dtype=np.float)
     dtexture.data = img_arr/255.0
