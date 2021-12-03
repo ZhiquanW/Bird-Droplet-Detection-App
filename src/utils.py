@@ -23,6 +23,8 @@ import math
 import dearpygui.dearpygui as dpg
 from PIL import Image, ImageOps, ImageDraw
 
+from dpg_utils import drawable_texture
+
 
 def format_dict_str(src_dict):
     str_dict = ""
@@ -528,6 +530,9 @@ def binary_droplet_detection(
     padding,
     stride,
     winsize,
+    top_left,
+    bottom_right,
+    blue_offset,
     threshold,
     erosion_iter,
     model,
@@ -543,6 +548,9 @@ def binary_droplet_detection(
         padding,
         stride,
         winsize,
+        top_left,
+        bottom_right,
+        blue_offset,
         model,
         device,
         verbose=verbose,
@@ -832,13 +840,22 @@ def binary_droplet_detection_heatmap(
     padding,
     stride,
     winsize,
+    top_left,
+    bottom_right,
+    blue_offset,
     model,
     device,
     verbose=False,
 ):
     e_image = Image.open(e_image_name)
+    # blue offset : [horizontal, vertical[]]
+    e_image = e_image.crop((top_left[1]+blue_offset[0],
+                            top_left[0]+blue_offset[1],
+                            bottom_right[1]+blue_offset[0],
+                            bottom_right[0]+blue_offset[1]))
     bf_image = Image.open(b_image_name)
-
+    bf_image = bf_image.crop((top_left[1],top_left[0],bottom_right[1],bottom_right[0]))
+   
     torch.cuda.empty_cache()
     droplet_densitymap = predict_droplet_densitymap(
         (e_image, bf_image),
@@ -868,36 +885,27 @@ def droplet_locs(predicted_map, w):
     return locs
 
 
-def draw_rectangle(buff_data, texture_name, droplet_locs, rect_color, rectangle_size):
-    im = Image.fromarray(np.uint8(buff_data),mode='RGBA')
+def draw_detected_droplets(dtexture:drawable_texture, droplet_locs, rect_color, rectangle_size):
+    im = Image.fromarray(np.uint8(dtexture.data),mode='RGBA')
     im.putalpha(0)
     im_draw = ImageDraw.Draw(im)
-    bounds = []
-    i = 0
-    n = 0
-    # print(type(locs))
     for loc in droplet_locs:
-        n += 1
-        bounds.append([loc[0] + rectangle_size, loc[1] - rectangle_size])
-        bounds.append([loc[0] - rectangle_size, loc[1] + rectangle_size])
-        # num
-        print("darwing", n)
-        # rectangle_locs
-        x1, y1 = bounds[i]
-        x2, y2 = bounds[i + 1]
-        i += 2
+        x1, y1 = [loc[0] + rectangle_size, loc[1] - rectangle_size]
+        x2, y2 = [loc[0] - rectangle_size, loc[1] + rectangle_size]
         # set outline
         im_draw.rectangle((x1, y1, x2, y2), outline=rect_color, width=1)
+        im_draw.rectangle((200 ,300, 400, 400), outline=(98,125,86,255), width=1)
+        im_draw.rectangle((210 ,30, 400, 400), outline="Green", width=1)
     im = im.transpose(Image.FLIP_TOP_BOTTOM)
-    img_arr = np.array(im)
-    dpg.set_value(texture_name, img_arr.flatten())
+    img_arr = np.array(im,dtype=np.float)
+    dtexture.data = img_arr/255.0
+    dpg.set_value(dtexture.texture_tag, dtexture.data.flatten())
 
 
 def clean_similar_locs(droplet_locs, defalut_size=4):
     n = 0
     for loc in droplet_locs:
         n += 1
-        print("loc", loc, n)
         pr_locs = []
         for x in range(1, defalut_size):
             for y in range(1, defalut_size):

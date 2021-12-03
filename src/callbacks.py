@@ -15,15 +15,23 @@ from core import app
 ImgPathPair = namedtuple("ImgPair", ["bright", "blue"])
 
 
-def image_selector_callback(sender, app_data, app: app):
+def image_selector_callback(sender, user_data, app: app):
     # clear previous images  ------别名已存在
-    dpg_utils.clear_drawlist(item_tags.texture_tags)
+    dpg_utils.clear_dtextures(app.img_dtexture_list)
+    dpg_utils.clear_dtextures(app.detection_notation_list)
+    # dpg_utils.clear_drawlist(item_tags.texture_tags)
     dpg_utils.clear_drawlist(item_tags.detection_tags)
+    dpg_utils.clear_drawlist([item_tags.target_ara_texture])
+    app.blue_offset = [0,0]
+    app.target_area_bottom_right = [0,0]
+    app.target_area_top_left = [0,0]
+    app.detection_data = [[], [], [], [], []]
+
     img_keys = []
     img_types = []
     img_path = []
-    for img_name in app_data["selections"].keys():
-        img_path.append(app_data["selections"][img_name])
+    for img_name in user_data["selections"].keys():
+        img_path.append(user_data["selections"][img_name])
         name_features = str(img_name).split(".")[0].split("_")
         img_types.append(name_features[-1].lower())
         img_keys.append("_".join(name_features[:-1]))
@@ -67,50 +75,44 @@ def image_selector_callback(sender, app_data, app: app):
     # br_img_cell = dpg_utils.add_texture_to_workspace(
     # img_path_pair.bright, item_tags.texture_tags[0], app.yaxis, True
     # )
-    (
-        br_img_cell,
-        app.img_size[0],
-        app.img_size[1],
-        im,
-    ) = dpg_utils.add_texture_to_workspace(
+    print("create",item_tags.texture_tags[0])
+    br_dtexture:dpg_utils.drawable_texture = dpg_utils.add_img_texture_to_workspace(
         img_path_pair.bright, item_tags.texture_tags[0], app.yaxis, True
     )
     # blue image cell
     # bl_img_cell = dpg_utils.add_texture_to_workspace(
     # img_path_pair.blue, item_tags.texture_tags[1], app.yaxis, False
     # )
-    (
-        bl_img_cell,
-        app.img_size[0],
-        app.img_size[1],
-        im,
-    ) = dpg_utils.add_texture_to_workspace(
+    bl_dtexture = dpg_utils.add_img_texture_to_workspace(
         img_path_pair.blue, item_tags.texture_tags[1], app.yaxis, False
     )
     # heatmap image cell
-    hm_img_cell = dpg_utils.add_image_buff_to_workspace(
-        br_img_cell.size, item_tags.texture_tags[2], app.yaxis, False, True
+    hm_dtexture = dpg_utils.add_notation_buff_to_workspace(
+        br_dtexture.size, item_tags.texture_tags[2], app.yaxis, False, True
     )
-    # get buff_data
-    app.buff_data = im
     # 5 detection types
     for i in range(5):
-        app.detection_gallery.append(
-            dpg_utils.add_image_buff_to_workspace(
-                br_img_cell.size, item_tags.detection_tags[i], app.yaxis, True, True
+        app.detection_notation_list.append(
+            dpg_utils.add_notation_buff_to_workspace(
+                br_dtexture.size, item_tags.detection_tags[i], app.yaxis, True, True
             )
         )
+    # target area texture
+    app.target_area_dtexture = dpg_utils.add_notation_buff_to_workspace(
+        br_dtexture.size,item_tags.target_ara_texture,app.yaxis,True,True)
+    app.target_area_bottom_right = br_dtexture.size
+    dpg.set_value(app.item_tag_dict[item_tags.target_area_bottom_right_slider],br_dtexture.size)
     dpg.fit_axis_data(app.xaxis)
     dpg.fit_axis_data(app.yaxis)
     # add cell info to app
-    app.texture_gallery.append(br_img_cell)
-    app.texture_gallery.append(bl_img_cell)
-    app.texture_gallery.append(hm_img_cell)
+    app.img_dtexture_list.append(br_dtexture)
+    app.img_dtexture_list.append(bl_dtexture)
+    app.img_dtexture_list.append(hm_dtexture)
     # inform app that the image is loaed
     app.image_loaded = True
 
     # crop target area
-    enable_all_items(app)
+    # enable_all_items(app)
 
 
 def check_image_loaded(app):
@@ -120,11 +122,10 @@ def check_image_loaded(app):
     return True
 
 
-def detect_droplets(sender, app_data, app):
+def detect_droplets(sender, user_data, app:app):
     if not check_image_loaded(app):
         return
     print("start detection: tpye{d}".format(d=app.target_device))
-
     droplet_num, predicted_map, predicted_heatmap = utils.binary_droplet_detection(
         app.img_pair.blue,
         app.img_pair.bright,
@@ -132,6 +133,9 @@ def detect_droplets(sender, app_data, app):
         app.padding,
         app.stride,
         app.winsize,
+        app.target_area_top_left,
+        app.target_area_bottom_right,
+        app.blue_offset,
         threshold=0.7,
         erosion_iter=1,
         model=app.models[app.target_type],
@@ -141,7 +145,7 @@ def detect_droplets(sender, app_data, app):
     app.droplet_num = droplet_num
     print("end detection: {d}".format(d=app.droplet_num))
     # get all droplet_locs
-    all_droplet_locs = utils.droplet_locs(predicted_map, app.img_size[0])
+    all_droplet_locs = utils.droplet_locs(predicted_map, app.img_dtexture_list[0].size[0])
     # clean_similar_locs
     print(
         "(app.target_type_names)[app.target_type]:",
@@ -152,13 +156,16 @@ def detect_droplets(sender, app_data, app):
     ] = utils.clean_similar_locs(all_droplet_locs)
     print("app.droplet_dict_locs:", app.droplet_dict_locs)
     # draw rectangle
-    utils.draw_rectangle(
-        buff_data=app.buff_data,
-        texture_name=(item_tags.detection_tags)[app.target_type],
-        droplet_locs=app.droplet_dict_locs[(app.target_type_names)[app.target_type]],
-        rect_color=app.droplet_dict_colors[(app.target_type_names)[app.target_type]],
-        rectangle_size=app.rectangle_size,
-    )
+    utils.draw_detected_droplets(
+                        dtexture=app.detection_notation_list[app.target_type],
+                        droplet_locs=app.droplet_dict_locs[
+                            app.target_type_names[app.target_type]
+                        ],
+                        rect_color=app.droplet_dict_colors[
+                            (app.target_type_names)[app.target_type]
+                        ],
+                        rectangle_size=app.rectangle_size,
+                    )
     # set heatmap   ------闪退
     dpg_utils.set_heatmap(predicted_heatmap)
     # setting rect
@@ -167,66 +174,66 @@ def detect_droplets(sender, app_data, app):
     dpg.show_item("setting rect group")
 
 
-def update_blue_offset(sender, app_data, app):
+def update_blue_offset(sender, user_data, app:app):
     if not check_image_loaded(app):
         return
-    app.blue_offset[0] = app_data[0]
-    app.blue_offset[1] = app_data[1]
+    app.blue_offset[0] = user_data[0]
+    app.blue_offset[1] = user_data[1]
     # print(app.blue_offset)
     dpg.configure_item(
-        app.texture_gallery[1].image_series_tag,
-        bounds_min=app.texture_gallery[1].top_left + app.blue_offset,
-        bounds_max=app.texture_gallery[1].bottom_right + app.blue_offset,
+        app.img_dtexture_list[1].image_series_tag,
+        bounds_min=app.img_dtexture_list[1].top_left + app.blue_offset,
+        bounds_max=app.img_dtexture_list[1].bottom_right + app.blue_offset,
     )
 
 
-def select_display_raw_texture(sender, app_data, app:app):
+def select_display_raw_texture(sender, user_data, app:app):
     if not check_image_loaded(app):
         return
-    texture_tag = app_data
+    texture_tag = user_data
     texture_idx = item_tags.texture_tags.index(texture_tag)
     app.display_raw_texture_type = texture_idx
     # disable all textures:
-    for i in range(len(app.texture_gallery)):
-        dpg.configure_item(app.texture_gallery[i].image_series_tag, show=False)
+    for i in range(len(app.img_dtexture_list)):
+        dpg.configure_item(app.img_dtexture_list[i].image_series_tag, show=False)
     # enable target texture
-    dpg.configure_item(app.texture_gallery[texture_idx].image_series_tag, show=True)
-def switch_display_raw_texture(sender,app_data,app:app):
+    dpg.configure_item(app.img_dtexture_list[texture_idx].image_series_tag, show=True)
+def switch_display_raw_texture(sender,user_data,app:app):
     app.display_raw_texture_type += 1
-    app.display_raw_texture_type %= len(app.texture_gallery)-1
+    app.display_raw_texture_type %= len(app.img_dtexture_list)-1
     # disable all textures:
-    for i in range(len(app.texture_gallery)):
-        dpg.configure_item(app.texture_gallery[i].image_series_tag, show=False)
+    for i in range(len(app.img_dtexture_list)):
+        dpg.configure_item(app.img_dtexture_list[i].image_series_tag, show=False)
     # enable target texture
-    dpg.configure_item(app.texture_gallery[app.display_raw_texture_type].image_series_tag, show=True)
+    dpg.configure_item(app.img_dtexture_list[app.display_raw_texture_type].image_series_tag, show=True)
 
 
-def update_padding(sender, app_data, app):
-    app.padding = app_data
+def update_padding(sender, user_data, app):
+    app.padding = user_data
 
 
-def update_stride(sender, app_data, app):
-    app.stride = app_data
+def update_stride(sender, user_data, app):
+    app.stride = user_data
 
 
-def update_win_size(sender, app_data, app):
-    app.winsize = app_data
+def update_win_size(sender, user_data, app):
+    app.winsize = user_data
 
 
-def swtich_target_type(sender, app_data, app):
+def swtich_target_type(sender, user_data, app):
     # names = ("Type One", "Type Two", "Type Three", "Type Four", "Type Five")
-    # target_type = names.index(app_data)
-    print(app_data)
-    target_type = app.target_type_names.index(app_data)
+    # target_type = names.index(user_data)
+    print(user_data)
+    target_type = app.target_type_names.index(user_data)
     app.target_type = target_type
     # print("ctarget type: {d}".format(d=names[app.target_type]))
     print("ctarget type: {d}".format(d=app.target_type_names[app.target_type]))
 
 
-def set_device(sender, app_data, app):
-    if app_data == "cpu":
+def set_device(sender, user_data, app):
+    if user_data == "cpu":
         app.target_device = torch.device("cpu")
-    elif app_data == "gpu":
+    elif user_data == "gpu":
         print("cuda available: {d}".format(d=torch.cuda.is_available()))
         if torch.cuda.is_available():
             app.target_device = torch.device("cuda")
@@ -244,7 +251,7 @@ def enable_all_rect_items(app):
         dpg.enable_item(val)
 
 
-# def add_droplet_manually(sender, app_data, app: app):
+# def add_droplet_manually(sender, user_data, app: app):
 #     if dpg.is_item_hovered(item_tags.image_plot_workspace):
 #         mouse_pos = np.array(dpg.get_plot_mouse_pos(), dtype=np.integer)
 #         app.detection_data[app.target_type].append(mouse_pos)
@@ -252,45 +259,48 @@ def enable_all_rect_items(app):
 #         # print(app.detection_data)
 
 
-def set_rect_size(sender, app_data, app):
-    app.rectangle_size = app_data
-    utils.draw_rectangle(
-        buff_data=app.buff_data,
-        texture_name=(item_tags.detection_tags)[app.target_type],
-        droplet_locs=app.droplet_dict_locs[(app.target_type_names)[app.target_type]],
-        rect_color=app.droplet_dict_colors[(app.target_type_names)[app.target_type]],
-        rectangle_size=app.rectangle_size,
-    )
-    print("set_rect_size")
+def set_rect_size(sender, user_data, app):
+    app.rectangle_size = user_data
+    utils.draw_detected_droplets(
+                        dtexture=app.detection_notation_list[app.target_type],
+                        droplet_locs=app.droplet_dict_locs[
+                            app.target_type_names[app.target_type]
+                        ],
+                        rect_color=app.droplet_dict_colors[
+                            app.target_type_names[app.target_type]
+                        ],
+                        rectangle_size=app.rectangle_size,
+                    )
     return app.rectangle_size
 
 
-def rect_color(sender, app_data, app):
-    new_rect_color = dpg.get_value(sender)
-    color = []
-    for i in new_rect_color:
-        color.append(int(i))
-    color_tuple = tuple(color)
-    # print("color_tuple",color_tuple)
+def rect_color(sender, user_data, app):
+    new_rect_color = tuple((np.array(user_data)*255.0).astype(np.uint8))
     # add color_tuple to the droplet_dict_colors
-    app.droplet_dict_colors[(app.target_type_names)[app.target_type]] = color_tuple
-    utils.draw_rectangle(
-        buff_data=app.buff_data,
-        texture_name=(item_tags.detection_tags)[app.target_type],
-        droplet_locs=app.droplet_dict_locs[(app.target_type_names)[app.target_type]],
-        rect_color=app.droplet_dict_colors[(app.target_type_names)[app.target_type]],
-        rectangle_size=app.rectangle_size,
-    )
+    app.droplet_dict_colors[app.target_type_names[app.target_type]] = new_rect_color
+    utils.draw_detected_droplets(
+                        dtexture=app.detection_notation_list[app.target_type],
+                        droplet_locs=app.droplet_dict_locs[
+                            app.target_type_names[app.target_type]
+                        ],
+                        rect_color=app.droplet_dict_colors[
+                            app.target_type_names[app.target_type]
+                        ],
+                        rectangle_size=app.rectangle_size,
+                    )
     # print("rect_color")
+    print(app.droplet_dict_colors[
+                            app.target_type_names[app.target_type]
+                        ])
 
 
-def switch_droplet_manual_detectio_mode(sender, app_data, app: app):
+def switch_droplet_manual_detectio_mode(sender, user_data, app: app):
     # print(app.enable_manual_detection_mode)
     app.enable_manual_detection_mode = not app.enable_manual_detection_mode
     dpg.set_value(app.item_tag_dict[item_tags.maunal_mode_radio],app.enable_manual_detection_mode)
 
 
-def operate_droplet_manually(sender, app_data, app: app):
+def operate_droplet_manually(sender, user_data, app: app):
     # check if maunal detection mode is enabled
     if app.enable_manual_detection_mode:
         if dpg.is_item_hovered(item_tags.image_plot_workspace):
@@ -306,9 +316,8 @@ def operate_droplet_manually(sender, app_data, app: app):
                     app.droplet_dict_locs[app.target_type_names[app.target_type]].pop(
                         nearest_droplet_id
                     )
-                    utils.draw_rectangle(
-                        buff_data=app.buff_data,
-                        texture_name=(item_tags.detection_tags)[app.target_type],
+                    utils.draw_detected_droplets(
+                        dtexture=app.detection_notation_list[app.target_type],
                         droplet_locs=app.droplet_dict_locs[
                             app.target_type_names[app.target_type]
                         ],
@@ -320,11 +329,10 @@ def operate_droplet_manually(sender, app_data, app: app):
             else:
                 # add loc to the droplet_dict_locs
                 app.droplet_dict_locs[app.target_type_names[app.target_type]].append(
-                    mouse_loc
+                    np.array(mouse_loc, dtype=np.int)
                 )
-                utils.draw_rectangle(
-                    buff_data=app.buff_data,
-                    texture_name=item_tags.detection_tags[app.target_type],
+                utils.draw_detected_droplets(
+                    app.detection_notation_list[app.target_type],
                     droplet_locs=app.droplet_dict_locs[
                         app.target_type_names[app.target_type]
                     ],
@@ -337,23 +345,32 @@ def operate_droplet_manually(sender, app_data, app: app):
         else:
             print("Outside the plot")
 
-def update_target_area_top_left(sender,app_data,app:app):
+def update_target_area_top_left(sender,user_data,app:app):
     if not check_image_loaded(app):
         return
-    app.target_area_top_left = [app_data[0],app_data[1]]
+    app.target_area_top_left = [user_data[0],user_data[1]]
+    dpg_utils.draw_target_area_dtexture(app.target_area_dtexture,app.target_area_top_left[0],app.target_area_top_left[1],app.target_area_bottom_right[0],app.target_area_bottom_right[1])
 
-
-def update_target_area_bottom_right(sender,app_data,app:app):
+def update_target_area_bottom_right(sender,user_data,app:app):
     if not check_image_loaded(app):
         return
-    app.target_area_bottom_right = [app_data[0],app_data[1]]
+    app.target_area_bottom_right = [user_data[0],user_data[1]]
+    dpg_utils.draw_target_area_dtexture(app.target_area_dtexture,app.target_area_top_left[0],app.target_area_top_left[1],app.target_area_bottom_right[0],app.target_area_bottom_right[1])
 
-
-def crop_target_area(sender,app_data,app:app):
-    print(app.img_pair.bright)
+def crop_target_area(sender,user_data,app:app):
     h0,h1,w0,w1 = utils.crop_rg_image(app.img_pair.bright)
-    print(h0)
-    app.target_area_top_left = [h0,w0]
     app.target_area_bottom_right = [h1,w1]
+    app.target_area_top_left = [h0,w0]
     dpg.set_value(app.item_tag_dict[item_tags.target_area_top_left_slider],[h0,w0])
-    print("A")
+    dpg.set_value(app.item_tag_dict[item_tags.target_area_bottom_right_slider],[h1,w1])
+    dpg_utils.draw_target_area_dtexture(app.target_area_dtexture,h0,w0,h1,w1)
+
+def export_image(sender,user_data,app:app):
+    pass
+
+def export_data(sender,user_data,app:app):
+    pass
+def set_export_data_file(sender,user_data,app:app):
+    app.export_file_path= user_data["file_path_name"]
+    dpg.set_value(item_tags.export_path_txt,user_data["file_name"])
+    print(user_data)

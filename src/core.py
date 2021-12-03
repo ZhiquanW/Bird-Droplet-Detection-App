@@ -101,8 +101,12 @@ class app:
         self.img_pair = callbacks.ImgPathPair(bright=None, blue=None)
         self.models = []
         self.detection_data = [[], [], [], [], []]
-        self.texture_gallery = []
-        self.detection_gallery = []
+        # store raw images (Bright, Blue, Heatmap)
+        self.img_dtexture_list = []
+        # store detected rectangles (0,1,2,3,4,5)
+        self.detection_notation_list = []
+        # store target area rectangel
+        self.target_area_dtexture = None
         self.target_area_top_left = [0,0]
         self.target_area_bottom_right = [0,0]
         self.image_spacing = 20
@@ -120,8 +124,6 @@ class app:
         self.default_font = None
         self.item_tag_dict = {}
         self.rect_item_tag_dict = {}
-        self.buff_data = None
-        self.img_size = [None, None]
         self.rectangle_size = 6
         self.target_type_names = (
             "Type One",
@@ -145,16 +147,19 @@ class app:
             "Type Five": [],
         }
         self.droplet_dict_colors = {
-            "Type One": "red",
-            "Type Two": "white",
+            "Type One": (255,0,0,255),
+            "Type Two": "white",    
             "Type Three": "green",
             "Type Four": "yellow",
             "Type Five": "blue",
         }
-        self.is_control_key_down = False
         # UI params
         self.enable_manual_detection_mode = False
         self.display_raw_texture_type = 0
+
+        # export params
+        self.export_file_path = "./default_densities.csv"
+        
 
     def __load_models(self):
         for i in range(5):
@@ -166,7 +171,7 @@ class app:
             self.models.append(model)
         print("model loaded")
 
-    def _create_file_selector(self):
+    def _create_file_selectors(self):
         with dpg.file_dialog(
             directory_selector=False,
             show=False,
@@ -179,7 +184,16 @@ class app:
             dpg.add_file_extension(".png", color=(0, 255, 0, 255))
             dpg.add_file_extension(".tiff", color=(0, 255, 255, 255))
             dpg.add_file_extension(".tif", color=(0, 255, 255, 255))
-
+        with dpg.file_dialog(
+            directory_selector=False,
+            show = True,
+            id = item_tags.export_data_file_selector,
+            file_count= 1,
+            callback=callbacks.set_export_data_file,
+            user_data= self
+        ):
+            dpg.add_file_extension(".*",color = (255,255,255,255))
+            dpg.add_file_extension(".csv",color = (255,0,0,255))
     def __set_font(self):
         # add a font registry
         with dpg.font_registry():
@@ -189,7 +203,7 @@ class app:
         print("font set")
 
     def __create_ui_layout(self):
-        self._create_file_selector()
+        self._create_file_selectors()
         self.__create_main_panel()
 
     def __create_main_panel(self):
@@ -247,7 +261,7 @@ class app:
                         )
                         self.rect_item_tag_dict["rect_size"] = dpg.add_slider_int(
                             label="rectangle size",
-                            default_value=10,
+                            default_value=15,
                             min_value=5,
                             max_value=30,
                             callback=callbacks.set_rect_size,
@@ -264,6 +278,15 @@ class app:
                             label="target area: top left",
                             size=2,
                             callback=callbacks.update_target_area_top_left,
+                            user_data=self,
+                            enabled=True,
+                            min_value=0,
+                            max_value=1000,
+                        )
+                        self.item_tag_dict[item_tags.target_area_bottom_right_slider] = dpg.add_slider_intx(
+                            label="target area: bottom right",
+                            size=2,
+                            callback=callbacks.update_target_area_bottom_right,
                             user_data=self,
                             enabled=True,
                             min_value=0,
@@ -309,6 +332,19 @@ class app:
                             callback=callbacks.detect_droplets,
                             user_data=self,
                         )
+                    with dpg.collapsing_header(label = "Data Export",default_open=True):
+                        self.item_tag_dict[item_tags.export_data_file_selector] = dpg.add_button(
+                            label="Output File Selector",
+                            callback=lambda: dpg.show_item(
+                                item_tags.export_data_file_selector
+                            ),
+                        )
+                        self.item_tag_dict[item_tags.export_path_txt] = dpg.add_text(
+                            dpg.get_value(value_tags.export_data_file_path),
+                            tag=item_tags.export_path_txt
+                        )
+                        self.item_tag_dict[item_tags.save_image_button] = dpg.add_button(label = "save image",callback=callbacks.export_image, user_data=self,)
+
                 with dpg.child_window(autosize_x=True):
                     dpg.add_plot(
                         label="Image Plot",
@@ -344,7 +380,7 @@ class app:
         )
         with dpg.handler_registry(tag=item_tags.keyboard_handler):
             dpg.add_key_release_handler(
-                key=dpg.mvKey_Tab,
+                key=dpg.mvKey_Q,
                 callback=callbacks.switch_display_raw_texture,
                 user_data=self,
             )
@@ -356,7 +392,7 @@ class app:
         dpg.bind_item_handler_registry(
             item_tags.image_plot_workspace, item_tags.keyboard_handler
         )
-
+  
     def launch(self):
         dpg.create_context()
         dpg.create_viewport(title="Oil Droplet Detection", width=3840, height=2160)
