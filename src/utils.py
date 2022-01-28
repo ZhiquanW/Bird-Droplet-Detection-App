@@ -1,4 +1,5 @@
 from typing import Dict, List, Tuple
+from xml.etree.ElementTree import PI
 from matplotlib import image
 from numpy import core
 from numpy.lib.type_check import imag
@@ -24,7 +25,7 @@ import dearpygui.dearpygui as dpg
 from PIL import Image, ImageOps, ImageDraw
 
 from dpg_utils import drawable_texture
-
+import pytiff
 
 def format_dict_str(src_dict):
     str_dict = ""
@@ -539,8 +540,7 @@ def binary_droplet_detection(
     device,
     disable_border=20,
     verbose=False,
-):
-    e_image = Image.open(e_image_name)
+):  
     droplet_densitymap = binary_droplet_detection_heatmap(
         e_image_name,
         b_image_name,
@@ -555,8 +555,9 @@ def binary_droplet_detection(
         device,
         verbose=verbose,
     )
+    heatmap_size = np.array(bottom_right) - np.array(top_left)
     droplet_heatmap = densitymap2heatmap(
-        e_image.size, droplet_densitymap[1, :, :], stride, winsize, padding
+        heatmap_size, droplet_densitymap[1, :, :], stride, winsize, padding
     )
     droplet_heatmap[:, :disable_border,] = 0
     droplet_heatmap[-disable_border:, :] = 0
@@ -627,7 +628,6 @@ def draw_predicted_loc_map(res_dict):
 def result_plot(result_dict, predicted_heatmap, labeled_map, labeled_heatmap):
     fig = make_subplots(rows=4, cols=5)
     for i in range(5):
-        # type_key = "type{type_id}".format(type_id=i + 1)
         type_filter = labeled_map == i
         human_label_map = np.zeros_like(labeled_map)
         human_label_map[type_filter] = 1
@@ -657,8 +657,6 @@ def collect_images(raw_image_dir, label_dir):
     # construct pairs of images (raw_e,raw_bf) in test image folders + label file
     _, _, raw_image_names = next(os.walk(raw_image_dir))
     _, _, label_names = next(os.walk(label_dir))
-    # print('find {n} counted images'.format(n = len(raw_image_names)))
-    # print('find {n} label files'.format(n = len(label_names)))
     pair_dict = {}
     for raw_image_name in raw_image_names:
         image_name = raw_image_name.split(".")[0]
@@ -680,14 +678,6 @@ def collect_images(raw_image_dir, label_dir):
         pair_dict[label_key][2] = droplet_loc
         pair_dict[label_key][3] += 1
     return pair_dict
-    # # check image - label pairs
-
-    # paired_counter = 0
-    # for key,val in pair_dict.items():
-    #     if val[3] == 3:
-    #         paired_counter += 1
-    # print('paired {n} raw images'.format(n = paired_counter))
-
 
 def check_result(result_dict, droplet_info):
     check_info = {}
@@ -847,13 +837,15 @@ def binary_droplet_detection_heatmap(
     device,
     verbose=False,
 ):
-    e_image = Image.open(e_image_name)
+    e_image =np.array(pytiff.Tiff(e_image_name))
+    e_image = Image.fromarray(e_image)
     # blue offset : [horizontal, vertical[]]
     e_image = e_image.crop((top_left[1]+blue_offset[0],
                             top_left[0]+blue_offset[1],
                             bottom_right[1]+blue_offset[0],
                             bottom_right[0]+blue_offset[1]))
-    bf_image = Image.open(b_image_name)
+    bf_image =np.array(pytiff.Tiff(b_image_name))
+    bf_image = Image.fromarray(bf_image)
     bf_image = bf_image.crop((top_left[1],top_left[0],bottom_right[1],bottom_right[0]))
    
     torch.cuda.empty_cache()
@@ -870,22 +862,22 @@ def binary_droplet_detection_heatmap(
     return droplet_densitymap
 
 
-def droplet_locs(predicted_map, w):
+def droplet_locs(predicted_map, w,top_left):
     cell_bool = predicted_map > 0
     locs = np.where(cell_bool)
-    x_locs = w - locs[0] + 4
-    y_locs = locs[1] - 10
+    x_locs = locs[0] 
+    y_locs = locs[1] 
     list_x_locs = x_locs.tolist()
     list_y_locs = y_locs.tolist()
     locs = []
     for i in range(0, len(list_x_locs)):
-        locs.append([list_y_locs[i], list_x_locs[i]])
-        # print(i)
-    # print(locs)
+        locs.append([list_y_locs[i]+top_left[1], list_x_locs[i]+top_left[0]+1])
+
     return locs
 
 
 def draw_detected_droplets(dtexture:drawable_texture, droplet_locs, rect_color, rectangle_size):
+    print(rect_color)
     im = Image.fromarray(np.uint8(dtexture.data),mode='RGBA')
     im.putalpha(0)
     im_draw = ImageDraw.Draw(im)
@@ -918,6 +910,7 @@ def clean_similar_locs(droplet_locs, defalut_size=4):
         for pr_loc in pr_locs:
             if pr_loc in droplet_locs:
                 droplet_locs.remove(pr_loc)
+    droplet_locs = [np.array(loc,dtype=np.int) for loc in droplet_locs]
     return droplet_locs
 
 

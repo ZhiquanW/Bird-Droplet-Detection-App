@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 
 from collections import namedtuple
 from PIL import Image, ImageOps, ImageDraw
+import pytiff
 
 class drawable_texture:
     def __init__(self, texture_tag, image_series_tag,data, size, top_left):
@@ -25,16 +26,19 @@ class drawable_texture:
         return self.top_left + self.size
 
 
-def register_texture(imgae_path, tag):
-    im = plt.imread(imgae_path) / 255.0
+def register_texture(imgae_path, tag,static:bool = False):
+    im =np.flip( np.array(pytiff.Tiff(imgae_path))/255.0,0)
     height, width, channels = im.shape
     im = np.append(im, np.ones((height, width, 1)), 2)
     with dpg.texture_registry():
-        dpg.add_dynamic_texture(width, height, im, tag=tag)
+        if static:
+            dpg.add_static_texture(width,height,im,tag=tag)
+        else:
+            dpg.add_dynamic_texture(width, height, im, tag=tag)
     return width, height ,im
 
-def add_img_texture_to_workspace(image_path, texture_tag, parent_axis, show=False):
-    img_w, img_h ,im = register_texture(image_path, texture_tag)
+def add_img_texture_to_workspace(image_path, texture_tag, parent_axis, show=False,static:bool=False):
+    img_w, img_h ,im = register_texture(image_path, texture_tag,static)
     img_size = np.array([img_w, img_h],dtype=np.int)
     img_top_left = np.array([0, 0],dtype=np.int)
     img_bottom_right = img_top_left + img_size
@@ -91,12 +95,13 @@ def clear_drawlist(img_ids):
        
 def clear_dtextures(dtextures:List[drawable_texture]):
     for dtext in dtextures:
-        if dpg.does_item_exist(dtext.image_series_tag):
-            dpg.delete_item(dtext.image_series_tag)
-            # dpg.remove_alias(dtext.image_series_tag)
-        if dpg.does_item_exist(dtext.texture_tag):
-        #     dpg.delete_item(dtext.texture_tag)
-            dpg.remove_alias(dtext.texture_tag)
+        if dtext is not None:
+            if dpg.does_item_exist(dtext.image_series_tag):
+                dpg.delete_item(dtext.image_series_tag)
+                # dpg.remove_alias(dtext.image_series_tag)
+            if dpg.does_item_exist(dtext.texture_tag):
+            #     dpg.delete_item(dtext.texture_tag)
+                dpg.remove_alias(dtext.texture_tag)
 
 ImgPathPair = namedtuple("ImgPair", ["bright", "blue"])
 

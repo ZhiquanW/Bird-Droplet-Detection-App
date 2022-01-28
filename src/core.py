@@ -1,3 +1,4 @@
+from faulthandler import disable
 from matplotlib.pyplot import legend, show
 import numpy as np
 import dearpygui.dearpygui as dpg
@@ -102,7 +103,7 @@ class app:
         self.models = []
         self.detection_data = [[], [], [], [], []]
         # store raw images (Bright, Blue, Heatmap)
-        self.img_dtexture_list = []
+        self.img_dtexture_list = [None,None,None]
         # store detected rectangles (0,1,2,3,4,5)
         self.detection_notation_list = []
         # store target area rectangel
@@ -192,14 +193,14 @@ class app:
             callback=callbacks.set_density_data_file,
             user_data=self,
         ):
-            dpg.add_file_extension(".*", color=(255, 255, 255, 255))
+            # dpg.add_file_extension(".*", color=(255, 255, 255, 255))
             dpg.add_file_extension(".csv", color=(255, 0, 0, 255))
 
     def __set_font(self):
         # add a font registry
         with dpg.font_registry():
             # add font (set as default for entire app)
-            self.default_font = dpg.add_font("Retron2000.ttf", 40)
+            self.default_font = dpg.add_font("Retron2000.ttf", 15)
         dpg.bind_font(self.default_font)
         print("font set")
 
@@ -209,211 +210,221 @@ class app:
 
     def __create_main_panel(self):
         with dpg.window(label="Main", tag=item_tags.main_window):
-            with dpg.group(horizontal=True):
-                with dpg.child_window(autosize_y=True, width=1000):
-                    with dpg.collapsing_header(
-                        label="Image Information", default_open=True
-                    ):
-                        self.item_tag_dict[item_tags.image_selector] = dpg.add_button(
-                            label="Image Selector",
-                            callback=lambda: dpg.show_item(
-                                item_tags.file_dialog_image_select
-                            ),
-                        )
-                        dpg.add_text(
-                            "bright image: {img_name}".format(
-                                img_name=""
-                                if self.img_pair.bright is None
-                                else self.img_pair.bright.split("/")[-1],
-                            ),
-                            tag="main_panel_bright_img_id",
-                        )
-                        dpg.add_text(
-                            "blue image: {img_name}".format(
-                                img_name=""
-                                if self.img_pair.blue is None
-                                else self.img_pair.blue.split("/")[-1],
-                            ),
-                            tag="main_panel_blue_img_id",
-                        )
-                    with dpg.collapsing_header(
-                        label="Workspace Operation", default_open=True
-                    ):
-                        self.item_tag_dict[
-                            item_tags.blue_img_offset_slider
-                        ] = dpg.add_slider_intx(
-                            label="blue image offset",
-                            size=2,
-                            callback=callbacks.update_blue_offset,
-                            user_data=self,
-                            enabled=True,
-                            min_value=-100,
-                            max_value=100,
-                            width=400,
-                        )
-                        self.item_tag_dict[
-                            item_tags.display_texture_radio
-                        ] = dpg.add_radio_button(
-                            ("Bright_Field", "Blue_Field", "Heatmap"),
-                            horizontal=True,
-                            user_data=self,
-                            callback=callbacks.select_display_raw_texture,
-                            enabled=True,
-                        )
-                        self.item_tag_dict[
-                            item_tags.maunal_mode_radio
-                        ] = dpg.add_checkbox(
-                            label="maunal mode",
-                            user_data=self,
-                            callback=callbacks.switch_droplet_manual_detectio_mode,
-                            default_value=self.enable_manual_detection_mode,
-                        )
-                        self.rect_item_tag_dict["rect_size"] = dpg.add_slider_int(
-                            label="rectangle size",
-                            default_value=self.rectangle_size,
-                            min_value=5,
-                            max_value=30,
-                            callback=callbacks.set_rect_size,
-                            user_data=self,
-                        )
-                        self.rect_item_tag_dict["rect_color"] = dpg.add_color_picker(
-                            label="rectangle color",
-                            display_hex=False,
-                            callback=callbacks.rect_color,
-                            user_data=self,
-                        )
-                    with dpg.collapsing_header(
-                        label="Detection Configuration", default_open=True
-                    ):
-                        self.item_tag_dict[
-                            item_tags.target_area_top_left_slider
-                        ] = dpg.add_slider_intx(
-                            label="target area: top left",
-                            size=2,
-                            callback=callbacks.update_target_area_top_left,
-                            user_data=self,
-                            enabled=True,
-                            min_value=0,
-                            max_value=1000,
-                        )
-                        self.item_tag_dict[
-                            item_tags.target_area_bottom_right_slider
-                        ] = dpg.add_slider_intx(
-                            label="target area: bottom right",
-                            size=2,
-                            callback=callbacks.update_target_area_bottom_right,
-                            user_data=self,
-                            enabled=True,
-                            min_value=0,
-                            max_value=1000,
-                        )
-                        self.item_tag_dict[
-                            item_tags.device_selector
-                        ] = dpg.add_radio_button(
-                            ("cpu", "gpu"),
-                            default_value="cpu",
-                            horizontal=True,
-                            callback=callbacks.set_device,
-                            user_data=app,
-                            enabled=True,
-                        )
+            dpg.add_plot(
+                    label="Image Plot",
+                    height=-1,
+                    width=-1,
+                    tag=item_tags.image_plot_workspace,
+                    equal_aspects=True,
+                    crosshairs=True,
+                    box_select_button=True,
+                )
+            dpg.add_plot_legend(parent=item_tags.image_plot_workspace)
 
-                        self.item_tag_dict[
-                            item_tags.target_droplet_type_combo
-                        ] = dpg.add_combo(
-                            self.target_type_names,
-                            label="target type",
-                            default_value=self.target_type_names[0],
-                            user_data=self,
-                            callback=callbacks.swtich_target_type,
-                        )
+            self.xaxis = dpg.add_plot_axis(
+                dpg.mvXAxis,
+                label="x axis",
+                invert=False,
+                parent=item_tags.image_plot_workspace,
+            )
+            self.yaxis = dpg.add_plot_axis(
+                dpg.mvYAxis,
+                label="y axis",
+                invert=True,
+                parent=item_tags.image_plot_workspace,
+            )
+               
+                # with dpg.window(width=500, height=300):
+                #     dpg.add_text("Click me with any mouse button", tag="text item")
+                #     dpg.add_text("Close window with arrow to change visible state printing to console", tag="text item 2")
 
-                        self.item_tag_dict["padding"] = dpg.add_input_int(
-                            label="Padding", default_value=7, enabled=True
-                        )
-                        self.item_tag_dict["stride"] = dpg.add_input_int(
-                            label="Stride", default_value=2, enabled=True
-                        )
-                        self.item_tag_dict["winsize"] = dpg.add_input_int(
-                            label="Window Size", default_value=10, enabled=True
-                        )
-                        self.item_tag_dict[
-                            item_tags.crop_target_area_bottom
-                        ] = dpg.add_button(
-                            label="crop target area",
-                            callback=callbacks.crop_target_area,
-                            user_data=self,
-                        )
-                        self.item_tag_dict[
-                            item_tags.auto_detection_button
-                        ] = dpg.add_button(
-                            label="auto detection",
-                            callback=callbacks.detect_droplets,
-                            user_data=self,
-                        )
-                    with dpg.collapsing_header(label="Data Export", default_open=True):
-                        self.item_tag_dict[
+            with dpg.window():
+                with dpg.collapsing_header(
+                    label="Image Information", default_open=True
+                ):
+                    self.item_tag_dict[item_tags.image_selector] = dpg.add_button(
+                        label="Image Selector",
+                        callback=lambda: dpg.show_item(
+                            item_tags.file_dialog_image_select
+                        ),
+                    )
+                    dpg.add_text(
+                        "bright image: {img_name}".format(
+                            img_name=""
+                            if self.img_pair.bright is None
+                            else self.img_pair.bright.split("/")[-1],
+                        ),
+                        tag="main_panel_bright_img_id",
+                    )
+                    dpg.add_text(
+                        "blue image: {img_name}".format(
+                            img_name=""
+                            if self.img_pair.blue is None
+                            else self.img_pair.blue.split("/")[-1],
+                        ),
+                        tag="main_panel_blue_img_id",
+                    )
+                with dpg.collapsing_header(
+                    label="Workspace Operation", default_open=True
+                ):
+                    self.item_tag_dict[
+                        item_tags.blue_img_offset_slider
+                    ] = dpg.add_slider_intx(
+                        label="blue image offset",
+                        size=2,
+                        callback=callbacks.update_blue_offset,
+                        user_data=self,
+                        enabled=True,
+                        min_value=-100,
+                        max_value=100,
+                        width=200,
+                    )
+                    self.item_tag_dict[
+                        item_tags.display_texture_radio
+                    ] = dpg.add_radio_button(
+                        ("Bright_Field", "Blue_Field", "Heatmap"),
+                        horizontal=True,
+                        user_data=self,
+                        callback=callbacks.select_display_raw_texture,
+                        enabled=True,
+                    )
+                    self.item_tag_dict[
+                        item_tags.maunal_mode_radio
+                    ] = dpg.add_checkbox(
+                        label="maunal mode",
+                        user_data=self,
+                        callback=callbacks.switch_droplet_manual_detectio_mode,
+                        default_value=self.enable_manual_detection_mode,
+                    )
+                    self.rect_item_tag_dict["rect_size"] = dpg.add_slider_int(
+                        label="rectangle size",
+                        default_value=self.rectangle_size,
+                        min_value=5,
+                        max_value=30,
+                        callback=callbacks.set_rect_size,
+                        user_data=self,
+                    )
+                    self.rect_item_tag_dict["rect_color"] = dpg.add_color_picker(
+                        label="rectangle color",
+                        display_hex=False,
+                        callback=callbacks.rect_color,
+                        user_data=self,
+                    )
+                with dpg.collapsing_header(
+                    label="Detection Configuration", default_open=True
+                ):
+                    self.item_tag_dict[
+                        item_tags.target_area_top_left_slider
+                    ] = dpg.add_slider_intx(
+                        label="target area: top left",
+                        size=2,
+                        callback=callbacks.update_target_area_top_left,
+                        user_data=self,
+                        enabled=True,
+                        min_value=0,
+                        max_value=1500,
+                    )
+                    self.item_tag_dict[
+                        item_tags.target_area_bottom_right_slider
+                    ] = dpg.add_slider_intx(
+                        label="target area: bottom right",
+                        size=2,
+                        callback=callbacks.update_target_area_bottom_right,
+                        user_data=self,
+                        enabled=True,
+                        min_value=0,
+                        max_value=1500,
+                    )
+                    self.item_tag_dict[
+                        item_tags.device_selector
+                    ] = dpg.add_radio_button(
+                        ("cpu", "gpu"),
+                        default_value="cpu",
+                        horizontal=True,
+                        callback=callbacks.set_device,
+                        user_data=app,
+                        enabled=True,
+                    )
+
+                    self.item_tag_dict[
+                        item_tags.target_droplet_type_combo
+                    ] = dpg.add_combo(
+                        self.target_type_names,
+                        label="target type",
+                        default_value=self.target_type_names[0],
+                        user_data=self,
+                        callback=callbacks.swtich_target_type,
+                    )
+
+                    self.item_tag_dict["padding"] = dpg.add_input_int(
+                        label="Padding", default_value=7, enabled=True
+                    )
+                    self.item_tag_dict["stride"] = dpg.add_input_int(
+                        label="Stride", default_value=2, enabled=True
+                    )
+                    self.item_tag_dict["winsize"] = dpg.add_input_int(
+                        label="Window Size", default_value=10, enabled=True
+                    )
+                    self.item_tag_dict[
+                        item_tags.crop_target_area_bottom
+                    ] = dpg.add_button(
+                        label="crop target area",
+                        callback=callbacks.crop_target_area,
+                        user_data=self,
+                        enabled  = False,
+                        show=False
+                    )
+
+                    self.item_tag_dict[
+                        item_tags.auto_detection_button
+                    ] = dpg.add_button(
+                        label="auto detection",
+                        callback=callbacks.detect_droplets,
+                        user_data=self,
+                    )
+                with dpg.collapsing_header(label="Data Export", default_open=True):
+                    self.item_tag_dict[
+                        item_tags.export_data_file_selector
+                    ] = dpg.add_button(
+                        label="Output File Selector",
+                        callback=lambda: dpg.show_item(
                             item_tags.export_data_file_selector
-                        ] = dpg.add_button(
-                            label="Output File Selector",
-                            callback=lambda: dpg.show_item(
-                                item_tags.export_data_file_selector
-                            ),
-                        )
-                        self.item_tag_dict[item_tags.export_path_txt] = dpg.add_text(
-                            dpg.get_value(value_tags.export_data_file_path),
-                            tag=item_tags.export_path_txt,
-                        )
-                        self.item_tag_dict[
-                            item_tags.save_image_button
-                        ] = dpg.add_button(
-                            label="save image",
-                            callback=callbacks.export_image,
-                            user_data=self,
-                        )
-                        self.item_tag_dict[item_tags.save_density_data_button] = dpg.add_button(
-                            label="save density data",
-                            callback=callbacks.export_density_data,
-                            user_data=self,
-                        )
-                        self.item_tag_dict[item_tags.save_distance_data_button] = dpg.add_button(
-                            label="save distance data",
-                            callback=callbacks.export_distances_data,
-                            user_data=self,
-                        )
-                with dpg.child_window(autosize_x=True):
-                    dpg.add_plot(
-                        label="Image Plot",
-                        height=-1,
-                        width=-1,
-                        tag=item_tags.image_plot_workspace,
-                        equal_aspects=True,
-                        crosshairs=True,
-                        box_select_button=True,
+                        ),
                     )
-                    dpg.add_plot_legend(parent=item_tags.image_plot_workspace)
-
-                    self.xaxis = dpg.add_plot_axis(
-                        dpg.mvXAxis,
-                        label="x axis",
-                        invert=False,
-                        parent=item_tags.image_plot_workspace,
+                    self.item_tag_dict[item_tags.export_path_txt] = dpg.add_text(
+                        dpg.get_value(value_tags.export_data_file_path),
+                        tag=item_tags.export_path_txt,
                     )
-                    self.yaxis = dpg.add_plot_axis(
-                        dpg.mvYAxis,
-                        label="y axis",
-                        invert=True,
-                        parent=item_tags.image_plot_workspace,
+                    self.item_tag_dict[
+                        item_tags.save_image_button
+                    ] = dpg.add_button(
+                        label="save location",
+                        callback=callbacks.export_location,
+                        user_data=self,
+                    )
+                    self.item_tag_dict[item_tags.save_density_data_button] = dpg.add_button(
+                        label="save density data",
+                        callback=callbacks.export_density_data,
+                        user_data=self,
+                    )
+                    self.item_tag_dict[item_tags.save_distance_data_button] = dpg.add_button(
+                        label="save distance data",
+                        callback=callbacks.export_distances_data,
+                        user_data=self,
                     )
 
     def handler_registry(self):
+        # with dpg.item_handler_registry(tag="widget handler") as handler:
+        #     dpg.add_item_visible_handler(callback=callbacks.debug_callbacks)
+        # dpg.bind_item_handler_registry("text item", "widget handler")
+
         with dpg.handler_registry(tag=item_tags.workspace_handler) as handler:
             dpg.add_mouse_click_handler(
                 button=0, callback=callbacks.operate_droplet_manually, user_data=self
             )
-        dpg.bind_item_handler_registry(
-            item_tags.image_plot_workspace, item_tags.workspace_handler
-        )
+        # dpg.bind_item_handler_registry(
+        #    "text", item_tags.workspace_handler
+        # )
         with dpg.handler_registry(tag=item_tags.keyboard_handler):
             dpg.add_key_release_handler(
                 key=dpg.mvKey_Q,
@@ -425,9 +436,9 @@ class app:
                 callback=callbacks.switch_droplet_manual_detectio_mode,
                 user_data=self,
             )
-        dpg.bind_item_handler_registry(
-            item_tags.image_plot_workspace, item_tags.keyboard_handler
-        )
+        # dpg.bind_item_handler_registry(
+        #     item_tags.image_plot_workspace, item_tags.keyboard_handler
+        # )
 
     def launch(self):
         dpg.create_context()
@@ -450,8 +461,8 @@ class app:
             "current_path": "/home/zhiquan/projects/Bird-Droplet-Detection-App/src/data",
             "current_filter": ".*",
             "selections": {
-                "PKDK_105_LE_PB_7-6-2020_Acquired Images_09-24-2020_030_BF.tif": "/home/zhiquan/projects/Bird-Droplet-Detection-App/src/data/test_0_BF.tif",
-                "PKDK_105_LE_PB_7-6-2020_Acquired Images_09-24-2020_030_E.tif": "/home/zhiquan/projects/Bird-Droplet-Detection-App/src/data/test_0_E.tif",
+                "PKDK_105_LE_PB_7-6-2020_Acquired Images_09-24-2020_030_BF.tif":os.path.join(os.getcwd(),"data\\mall107_re_pb_10-18-2021_670_BF.tif"),
+                "PKDK_105_LE_PB_7-6-2020_Acquired Images_09-24-2020_030_E.tif": os.path.join(os.getcwd(),"data\\mall107_re_pb_10-18-2021_670_E.tif")
             },
         }
         callbacks.image_selector_callback(None, app_data, self)

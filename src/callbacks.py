@@ -1,3 +1,5 @@
+import copy
+from multiprocessing.sharedctypes import Value
 import os
 from typing import ItemsView
 import dearpygui.dearpygui as dpg
@@ -11,13 +13,12 @@ import dpg_utils
 import numpy as np
 import utils
 from tags import *
-from core import app
 import csv
 
 ImgPathPair = namedtuple("ImgPair", ["bright", "blue"])
 
 
-def image_selector_callback(sender, user_data, app: app):
+def image_selector_callback(sender, user_data, app):
     # clear previous images  ------别名已存在
     dpg_utils.clear_dtextures(app.img_dtexture_list)
     dpg_utils.clear_dtextures(app.detection_notation_list)
@@ -60,9 +61,9 @@ def image_selector_callback(sender, user_data, app: app):
             )
         )
         return
-    if img_types[0] == "bf":
+    if img_types[0].lower() == "bf":
         img_path_pair = ImgPathPair(bright=img_path[0], blue=img_path[1])
-    elif img_types[0] == "e":
+    elif img_types[0].lower() == "e":
         img_path_pair = ImgPathPair(bright=img_path[1], blue=img_path[0])
 
     print(
@@ -90,16 +91,15 @@ def image_selector_callback(sender, user_data, app: app):
     # br_img_cell = dpg_utils.add_texture_to_workspace(
     # img_path_pair.bright, item_tags.texture_tags[0], app.yaxis, True
     # )
-    print("create", item_tags.texture_tags[0])
     br_dtexture: dpg_utils.drawable_texture = dpg_utils.add_img_texture_to_workspace(
-        img_path_pair.bright, item_tags.texture_tags[0], app.yaxis, True
+        img_path_pair.bright, item_tags.texture_tags[0], app.yaxis, True, True
     )
     # blue image cell
     # bl_img_cell = dpg_utils.add_texture_to_workspace(
     # img_path_pair.blue, item_tags.texture_tags[1], app.yaxis, False
     # )
     bl_dtexture = dpg_utils.add_img_texture_to_workspace(
-        img_path_pair.blue, item_tags.texture_tags[1], app.yaxis, False
+        img_path_pair.blue, item_tags.texture_tags[1], app.yaxis, False, True
     )
     # heatmap image cell
     hm_dtexture = dpg_utils.add_notation_buff_to_workspace(
@@ -123,9 +123,9 @@ def image_selector_callback(sender, user_data, app: app):
     dpg.fit_axis_data(app.xaxis)
     dpg.fit_axis_data(app.yaxis)
     # add cell info to app
-    app.img_dtexture_list.append(br_dtexture)
-    app.img_dtexture_list.append(bl_dtexture)
-    app.img_dtexture_list.append(hm_dtexture)
+    app.img_dtexture_list[0] = br_dtexture
+    app.img_dtexture_list[1] = bl_dtexture
+    app.img_dtexture_list[2] = hm_dtexture
     # inform app that the image is loaed
     app.image_loaded = True
 
@@ -135,15 +135,15 @@ def image_selector_callback(sender, user_data, app: app):
 
 def check_image_loaded(app):
     if not app.image_loaded:
-        print("images are not loaded")
         return False
     return True
 
 
-def detect_droplets(sender, user_data, app: app):
-    if not check_image_loaded(app):
+def detect_droplets(sender, user_data, app):
+    if not app.image_loaded:
+        print("images are not loaded")
         return
-    print("start detection: tpye{d}".format(d=app.target_device))
+    print("start detection on: {d}".format(d=app.target_device))
     droplet_num, predicted_map, predicted_heatmap = utils.binary_droplet_detection(
         app.img_pair.blue,
         app.img_pair.bright,
@@ -164,7 +164,7 @@ def detect_droplets(sender, user_data, app: app):
     print("end detection: {d}".format(d=app.droplet_num))
     # get all droplet_locs
     all_droplet_locs = utils.droplet_locs(
-        predicted_map, app.img_dtexture_list[0].size[0]
+        predicted_map, app.img_dtexture_list[0].size[0], app.target_area_top_left
     )
     # clean_similar_locs
     print(
@@ -179,18 +179,19 @@ def detect_droplets(sender, user_data, app: app):
     utils.draw_detected_droplets(
         dtexture=app.detection_notation_list[app.target_type],
         droplet_locs=app.droplet_dict_locs[app.target_type_names[app.target_type]],
-        rect_color=app.droplet_dict_colors[(app.target_type_names)[app.target_type]],
+        rect_color=app.droplet_dict_colors[app.target_type_names[app.target_type]],
         rectangle_size=app.rectangle_size,
     )
+ 
     # set heatmap   ------闪退
-    dpg_utils.set_heatmap(predicted_heatmap)
+    # dpg_utils.set_heatmap(predicted_heatmap)
     # setting rect
     # app.setting_rect_group()
     # enable_all_rect_items(app)
-    dpg.show_item("setting rect group")
+    # dpg.show_item("setting rect group")
 
 
-def update_blue_offset(sender, user_data, app: app):
+def update_blue_offset(sender, user_data, app):
     if not check_image_loaded(app):
         return
     app.blue_offset[0] = user_data[0]
@@ -203,7 +204,7 @@ def update_blue_offset(sender, user_data, app: app):
     )
 
 
-def select_display_raw_texture(sender, user_data, app: app):
+def select_display_raw_texture(sender, user_data, app):
     if not check_image_loaded(app):
         return
     texture_tag = user_data
@@ -216,7 +217,7 @@ def select_display_raw_texture(sender, user_data, app: app):
     dpg.configure_item(app.img_dtexture_list[texture_idx].image_series_tag, show=True)
 
 
-def switch_display_raw_texture(sender, user_data, app: app):
+def switch_display_raw_texture(sender, user_data, app):
     app.display_raw_texture_type += 1
     app.display_raw_texture_type %= len(app.img_dtexture_list) - 1
     # disable all textures:
@@ -243,7 +244,6 @@ def update_win_size(sender, user_data, app):
 def swtich_target_type(sender, user_data, app):
     # names = ("Type One", "Type Two", "Type Three", "Type Four", "Type Five")
     # target_type = names.index(user_data)
-    print(user_data)
     target_type = app.target_type_names.index(user_data)
     app.target_type = target_type
     # print("ctarget type: {d}".format(d=names[app.target_type]))
@@ -257,6 +257,8 @@ def set_device(sender, user_data, app):
         print("cuda available: {d}".format(d=torch.cuda.is_available()))
         if torch.cuda.is_available():
             app.target_device = torch.device("cuda")
+        else:
+            dpg.set_value(app.item_tag_dict[item_tags.device_selector], "cpu")
     print("current device: {d}".format(d=app.target_device))
 
 
@@ -267,7 +269,6 @@ def enable_all_items(app):
 
 def enable_all_rect_items(app):
     for key, val in app.rect_item_tag_dict.items():
-        print(val)
         dpg.enable_item(val)
 
 
@@ -300,11 +301,9 @@ def rect_color(sender, user_data, app):
         rect_color=app.droplet_dict_colors[app.target_type_names[app.target_type]],
         rectangle_size=app.rectangle_size,
     )
-    # print("rect_color")
-    print(app.droplet_dict_colors[app.target_type_names[app.target_type]])
 
 
-def switch_droplet_manual_detectio_mode(sender, user_data, app: app):
+def switch_droplet_manual_detectio_mode(sender, user_data, app):
     # print(app.enable_manual_detection_mode)
     app.enable_manual_detection_mode = not app.enable_manual_detection_mode
     dpg.set_value(
@@ -312,13 +311,14 @@ def switch_droplet_manual_detectio_mode(sender, user_data, app: app):
     )
 
 
-def operate_droplet_manually(sender, user_data, app: app):
+def operate_droplet_manually(sender, user_data, app):
     # check if maunal detection mode is enabled
     if app.enable_manual_detection_mode:
         if dpg.is_item_hovered(item_tags.image_plot_workspace):
             # get droplet loc
             mouse_loc = dpg.get_plot_mouse_pos()
-            if dpg.is_key_down(dpg.mvKey_LControl):
+            if dpg.is_key_down(dpg.mvKey_Control):
+                print("delete buttom")
                 nearest_droplet_id = utils.find_nearest_droplet_by_type(
                     np.array(mouse_loc, dtype=np.int),
                     app.droplet_dict_locs[app.target_type_names[app.target_type]],
@@ -355,10 +355,11 @@ def operate_droplet_manually(sender, user_data, app: app):
                 )
                 print("app.droplet_dict_locs:", app.droplet_dict_locs)
         else:
-            print("Outside the plot")
+            # print("Outside the plot")
+            pass
 
 
-def update_target_area_top_left(sender, user_data, app: app):
+def update_target_area_top_left(sender, user_data, app):
     if not check_image_loaded(app):
         return
     app.target_area_top_left = [user_data[0], user_data[1]]
@@ -371,7 +372,7 @@ def update_target_area_top_left(sender, user_data, app: app):
     )
 
 
-def update_target_area_bottom_right(sender, user_data, app: app):
+def update_target_area_bottom_right(sender, user_data, app):
     if not check_image_loaded(app):
         return
     app.target_area_bottom_right = [user_data[0], user_data[1]]
@@ -384,7 +385,7 @@ def update_target_area_bottom_right(sender, user_data, app: app):
     )
 
 
-def crop_target_area(sender, user_data, app: app):
+def crop_target_area(sender, user_data, app):
     h0, h1, w0, w1 = utils.crop_rg_image(app.img_pair.bright)
     app.target_area_bottom_right = [h1, w1]
     app.target_area_top_left = [h0, w0]
@@ -395,11 +396,22 @@ def crop_target_area(sender, user_data, app: app):
     dpg_utils.draw_target_area_dtexture(app.target_area_dtexture, h0, w0, h1, w1)
 
 
-def export_image(sender, user_data, app: app):
-    pass
+def export_location(sender, user_data, app):
+    try:
+        import json 
+        file_name = app.img_pair.bright.split(".")[0]+".json"
+        np2list_dict = copy.deepcopy(app.droplet_dict_locs)
+        for key in np2list_dict.keys():
+            for i in range(len(np2list_dict[key])):
+                np2list_dict[key][i] = np2list_dict[key][i].tolist()
+        with open(file_name, 'w') as fp:
+            json.dump(np2list_dict, fp,  indent=4)
+        print("export location file: {fn}".format(file_name))
+    except Exception as e: 
+        print("[error] export_location: {emsg}".format(emsg = e))
 
 
-def export_density_data(sender, user_data, app: app):
+def export_density_data(sender, user_data, app):
     # if os.path.exists(app.export_file_path):
     with open(app.density_file_path, "a") as csv_file:
         csv_writer = csv.writer(csv_file)
@@ -411,13 +423,13 @@ def export_density_data(sender, user_data, app: app):
         csv_writer.writerow(csv_data_row)
 
 
-def set_density_data_file(sender, user_data, app: app):
+def set_density_data_file(sender, user_data, app):
     app.density_file_path = user_data["file_path_name"]
     dpg.set_value(item_tags.export_path_txt, user_data["file_name"])
     print(user_data)
 
 
-def export_distances_data(sender, user_data, app: app):
+def export_distances_data(sender, user_data, app):
     rows = []
     with open(app.distance_file_path, "a") as csv_file:
         csv_writer = csv.writer(csv_file)
@@ -429,3 +441,7 @@ def export_distances_data(sender, user_data, app: app):
                 row = [br_img_name, site_num, "oil droplet", k, loc[0], loc[1]]
                 rows.append(row)
         csv_writer.writerows(rows)
+
+
+def debug_callbacks(sender, user_data, app):
+    print("A")
